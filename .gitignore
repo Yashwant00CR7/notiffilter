@@ -1,0 +1,22 @@
+# Android / Gradle build output
+build/
+app/build/
+.gradle/
+.kotlin/
+*.apk
+*.aab
+
+# Machine-specific SDK path
+local.properties
+
+# Secrets never belong here; the Groq key is entered in-app and Keystore-encrypted.
+*.keystore
+*.jks
+
+# IDE
+.idea/
+*.iml
+captures/
+
+# macOS
+.DS_Store
