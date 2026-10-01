@@ -10,6 +10,32 @@ An intelligent, 100% offline Android notification filter that learns from your d
 
 ---
 
+## Screenshots
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="33%">
+        <b>1. Filtered Apps (Home)</b><br><br>
+        <img src="docs/screenshots/home_screen.jpg" width="280" alt="Home Screen - Filtered Apps Overview" /><br><br>
+        <i>Manage opted-in apps and monitor filtering status.</i>
+      </td>
+      <td align="center" width="33%">
+        <b>2. Decision Log (Explainability)</b><br><br>
+        <img src="docs/screenshots/log_screen.jpg" width="280" alt="Log Screen - Decision Evidence" /><br><br>
+        <i>Inspect exact log-odds, features, and reverse mistakes in 1 tap.</i>
+      </td>
+      <td align="center" width="33%">
+        <b>3. Privacy & Caution Controls</b><br><br>
+        <img src="docs/screenshots/settings_screen.jpg" width="280" alt="Settings Screen - Caution Controls" /><br><br>
+        <i>Control model autonomy, thresholds, and offline guarantees.</i>
+      </td>
+    </tr>
+  </table>
+</div>
+
+---
+
 ## The Problem
 
 Modern consumer apps (food delivery like Swiggy/Zomato, quick-commerce like Blinkit/Zepto, cab aggregators, shopping apps) mix a few essential alerts into an endless barrage of promotional marketing:
@@ -28,6 +54,29 @@ Handcrafted keyword rules fail because marketing copy is constantly reworded. Mu
 - 🔕 **Selective Notification Sound:** Mute noisy apps in Android Settings once; NotifFilter re-posts and rings **only** for keepers.
 - 🎯 **Observe First, Filter Second:** New apps start in observation mode without altering notifications, letting you train the model safely before enabling filtering.
 - 🔒 **Fail-Safe (Optimistic Show):** If anything is uncertain or fails, the notification is shown normally. Nothing is ever lost or silently suppressed by mistake.
+
+---
+
+## Walkthrough: Inside the App
+
+### 1. App Management & Mode Control ([Home Screen](docs/screenshots/home_screen.jpg))
+The home screen lists all the applications you have chosen to filter (e.g., Swiggy, Paytm, GPay, ICICI Direct, Chennai One, redBus):
+- **Observe Mode:** Newly added apps begin in observe mode. Incoming notifications are fingerprinted and logged silently without being blocked or altered.
+- **Active Filtering Mode:** Once trained, an app can be set to active filtering. You set the original app's notification channels to Silent, and NotifFilter takes over sound delivery for keepers only.
+- **App Picker (+):** Easily add any launcher app on your device without granting invasive package-inspection permissions.
+
+### 2. Explainable AI & 1-Tap Feedback ([Log Screen](docs/screenshots/log_screen.jpg))
+NotifFilter is built on full explainability—no black-box surprises:
+- **Transparent Reasoning:** Every filtered notification reveals its computed log-odds and the exact tokens that triggered the decision:
+  - *Example 1 (Chennai One):* `"Hidden (22.9): and, get, your, to · new template"` (Blocked a 30% discount promo).
+  - *Example 2 (Swiggy):* `"Hidden (10.4): channel marketing_notification_id, at, shout, your · new template"` (Blocked an aggressive Dineout discount).
+- **Instant Correction ("Wrong — always show this"):** Tapping the correction button immediately overrides the verdict, creates a permanent pinned rule, and retrains the model on your ground truth so similar mistakes never repeat.
+
+### 3. Model Autonomy & Privacy Settings ([Settings Screen](docs/screenshots/settings_screen.jpg))
+Tune how conservative or aggressive the classification engine is:
+- **Confidence Needed Slider:** Set the minimum Bayesian evidence margin (e.g., `4.0`) required before the model is allowed to hide or keep a template on its own. Higher values force the model to ask you more often; lower values give it greater autonomy.
+- **Minimum Labels Before Autonomy:** Enforce a minimum count of human-verified labels (e.g., `8`) for any app before autonomous filtering kicks in. Unseen templates remain queued until the model has sufficient training data.
+- **Privacy & Permissions:** Instant verification that notification access is active and zero internet permissions are present.
 
 ---
 
