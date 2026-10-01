@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yk.notiffilter.NotifFilterApp
 import com.yk.notiffilter.data.AppRule
+import com.yk.notiffilter.data.FilterMode
 import com.yk.notiffilter.service.FilterListenerService
 import com.yk.notiffilter.ui.SystemSettings
 import kotlinx.coroutines.flow.SharingStarted
@@ -54,7 +55,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val rules = repo.rules()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun hasApiKey(): Boolean = repo.settings().isConfigured
+    val pending = repo.queue()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,21 +66,21 @@ fun HomeScreen(
     onOpenRule: (String) -> Unit,
     onOpenLog: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenQueue: () -> Unit,
     vm: HomeViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     val rules by vm.rules.collectAsStateWithLifecycle()
+    val pending by vm.pending.collectAsStateWithLifecycle()
 
-    // Listener access and the API key are both changed outside this app, so re-read
-    // them whenever the screen comes back to the foreground rather than caching.
+    // Listener access is changed outside this app, so re-read it whenever the screen
+    // comes back to the foreground rather than caching it.
     var listenerEnabled by remember { mutableStateOf(FilterListenerService.isEnabled(context)) }
-    var hasKey by remember { mutableStateOf(vm.hasApiKey()) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 listenerEnabled = FilterListenerService.isEnabled(context)
-                hasKey = vm.hasApiKey()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -121,15 +123,24 @@ fun HomeScreen(
                     )
                 }
             }
-            if (!hasKey) {
+            if (pending.isNotEmpty()) {
                 item {
-                    SetupCard(
-                        title = "No Groq API key",
-                        body = "New notification templates can't be classified without one. " +
-                            "Until it's set, everything is shown as normal.",
-                        action = "Add key",
-                        onAction = onOpenSettings,
-                    )
+                    Card(onClick = onOpenQueue, modifier = Modifier.fillMaxWidth()) {
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    if (pending.size == 1) "1 template needs your verdict"
+                                    else "${pending.size} templates need your verdict"
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    "Each answer covers every future notification with that " +
+                                        "wording, and teaches the model the ones it hasn't seen."
+                                )
+                            },
+                        )
+                    }
                 }
             }
             if (SystemSettings.isBatteryOptimised(context)) {
@@ -155,8 +166,8 @@ fun HomeScreen(
             if (rules.isEmpty()) {
                 item {
                     Text(
-                        "No apps yet. Apps you don't add here are never inspected, " +
-                            "never classified, and never sent anywhere.",
+                        "No apps yet. Apps you don't add here are never inspected at all " +
+                            "— and nothing any app posts ever leaves this device.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -169,14 +180,24 @@ fun HomeScreen(
                         headlineContent = { Text(rule.appLabel) },
                         supportingContent = {
                             Text(
-                                rule.prose.ifBlank { "No instruction set" },
+                                when {
+                                    !rule.enabled -> "Off — notifications pass through untouched"
+                                    rule.mode == FilterMode.OBSERVE ->
+                                        "Observing — collecting templates, hiding nothing"
+                                    else -> "Filtering"
+                                },
                                 maxLines = 2,
                             )
                         },
                         trailingContent = {
                             Text(
-                                if (rule.enabled) "On" else "Off",
-                                color = if (rule.enabled) MaterialTheme.colorScheme.primary
+                                when {
+                                    !rule.enabled -> "Off"
+                                    rule.mode == FilterMode.OBSERVE -> "Observe"
+                                    else -> "Active"
+                                },
+                                color = if (rule.enabled && rule.mode == FilterMode.ACTIVE)
+                                    MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         },

@@ -10,67 +10,47 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yk.notiffilter.NotifFilterApp
 import com.yk.notiffilter.service.FilterListenerService
 import com.yk.notiffilter.ui.SystemSettings
-import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
-    private val application = app as NotifFilterApp
-    private val settings = application.settings
+    private val settings = (app as NotifFilterApp).settings
 
-    var apiKey by mutableStateOf(settings.apiKey)
-    var model by mutableStateOf(settings.model)
-    var baseUrl by mutableStateOf(settings.baseUrl)
-    var status by mutableStateOf<String?>(null)
-    var testing by mutableStateOf(false)
+    var confidenceMargin by mutableFloatStateOf(settings.confidenceMargin)
+    var minExamples by mutableIntStateOf(settings.minExamples)
 
-    fun save() {
-        settings.apiKey = apiKey.trim()
-        settings.model = model
-        settings.baseUrl = baseUrl
-        status = "Saved"
+    fun saveMargin(value: Float) {
+        confidenceMargin = value
+        settings.confidenceMargin = value
     }
 
-    fun test() {
-        save()
-        testing = true
-        status = "Testing…"
-        viewModelScope.launch {
-            val classifier = application.classifier()
-            status = if (classifier == null) {
-                "No API key set"
-            } else {
-                classifier.testConnection().fold(
-                    onSuccess = { it },
-                    onFailure = { it.message?.take(200) ?: "Failed" },
-                )
-            }
-            testing = false
-        }
+    fun saveMinExamples(value: Int) {
+        minExamples = value
+        settings.minExamples = value
     }
 }
 
@@ -100,50 +80,58 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Classifier", style = MaterialTheme.typography.titleMedium)
+            Text("Privacy", style = MaterialTheme.typography.titleMedium)
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Nothing leaves this device", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "NotifFilter has no internet permission at all. Classification runs " +
+                            "here, from the verdicts you've given it — there is no API key, no " +
+                            "server and no account, and the operating system will not let this " +
+                            "app open a network connection even if it tried to.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+
+            Text("How cautious it is", style = MaterialTheme.typography.titleMedium)
             Text(
-                "The key is encrypted with an Android Keystore key and never leaves this " +
-                    "device. Only text from apps you've added is ever sent to Groq.",
+                "The model may act on its own only when the evidence clears this much. " +
+                    "Raise it to be asked more often and surprised less; lower it to answer " +
+                    "fewer questions and let it guess more.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
-            OutlinedTextField(
-                value = vm.apiKey,
-                onValueChange = { vm.apiKey = it },
-                label = { Text("Groq API key") },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
+            Text(
+                "Confidence needed: ${"%.1f".format(vm.confidenceMargin)}",
+                style = MaterialTheme.typography.bodyMedium,
             )
-            OutlinedTextField(
-                value = vm.model,
-                onValueChange = { vm.model = it },
-                label = { Text("Model") },
-                supportingText = {
-                    Text("Editable because Groq's free model lineup churns; a retired id " +
-                        "would otherwise need a new build.")
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = vm.baseUrl,
-                onValueChange = { vm.baseUrl = it },
-                label = { Text("Base URL") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+            Slider(
+                value = vm.confidenceMargin,
+                onValueChange = vm::saveMargin,
+                valueRange = 1f..12f,
+                steps = 21,
             )
 
-            Button(onClick = vm::test, enabled = !vm.testing, modifier = Modifier.fillMaxWidth()) {
-                Text("Save and test connection")
-            }
-            vm.status?.let {
-                Text(it, style = MaterialTheme.typography.bodyMedium)
-            }
+            Text(
+                "Your labels before it may decide alone: ${vm.minExamples}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                "Below this, everything is queued for you. With only a handful of examples " +
+                    "the arithmetic looks confident while meaning nothing, so it stays quiet " +
+                    "until you've actually taught it something.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Slider(
+                value = vm.minExamples.toFloat(),
+                onValueChange = { vm.saveMinExamples(it.roundToInt()) },
+                valueRange = 0f..40f,
+                steps = 39,
+            )
 
             Text("Permissions", style = MaterialTheme.typography.titleMedium)
-
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
@@ -161,7 +149,6 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                     }) { Text("Open notification access") }
                 }
             }
-
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Keep running in the background", style = MaterialTheme.typography.titleSmall)
@@ -178,14 +165,12 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                 }
             }
 
-            Text(
-                "How filtering works",
-                style = MaterialTheme.typography.titleMedium,
-            )
+            Text("How filtering works", style = MaterialTheme.typography.titleMedium)
             Text(
                 "A notification stays on screen until something positively decides to hide " +
-                    "it. If you're offline, the key is wrong, or Groq is down, everything is " +
-                    "shown exactly as it would be without this app. Nothing is silently lost.",
+                    "it, and only a template you've answered — or one the model is certain " +
+                    "matches something you've answered — is ever hidden. Everything else is " +
+                    "queued for you and shown in the meantime. Nothing is silently lost.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

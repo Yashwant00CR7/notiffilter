@@ -11,18 +11,27 @@ enum class Verdict { KEEP, HIDE }
 enum class VerdictSource { MODEL, USER }
 
 /**
- * An app the user has opted in. Apps without a row here are never inspected,
- * never classified, and never sent anywhere.
+ * How far along an app is.
+ *
+ * A newly added app starts in [OBSERVE]: it is logged and templates are collected,
+ * but nothing is hidden, nothing is re-posted, and the app is left entirely loud.
+ * Observing is free of risk by construction, which is what makes it an acceptable
+ * answer to a classifier that knows nothing on day one.
+ */
+enum class FilterMode { OBSERVE, ACTIVE }
+
+/**
+ * An app the user has opted in. Apps without a row here are never inspected.
+ *
+ * There is no longer a written instruction: the app is taught by labelling its actual
+ * notifications, which is both more precise than prose and the only thing an on-device
+ * counting model can learn from.
  */
 @Entity(tableName = "app_rules")
 data class AppRule(
     @PrimaryKey val packageName: String,
     val appLabel: String,
-    /**
-     * Free-text instruction handed to the model verbatim, e.g.
-     * "Keep order status, delivery updates and refunds. Drop coupons and restaurant ads."
-     */
-    val prose: String,
+    val mode: FilterMode = FilterMode.OBSERVE,
     val enabled: Boolean = true,
     /**
      * Re-post kept notifications on our own high-importance channel so they make a
@@ -33,23 +42,38 @@ data class AppRule(
 )
 
 /**
- * The verdict cache, keyed by template fingerprint.
+ * The verdict table: one row per template, and the single authority on what happens.
  *
- * This is really a user-editable rule table that the model merely bootstraps: a row
- * written by the model can be flipped by the user from the log, after which it is
- * pinned ([source] = USER) and never re-classified.
+ * It is a user-editable rule table that the model only ever proposes entries for. A
+ * row with [needsVerdict] set is a proposal awaiting the user's answer; a row with
+ * [source] = USER is settled and never reconsidered.
+ *
+ * Only settled USER rows train the classifier. Rows the model produced are cache
+ * entries, not ground truth — training on them would bake unreviewed guesses into
+ * every future decision with no way to tell which ones were wrong.
  */
 @Entity(
     tableName = "template_verdicts",
-    indices = [Index("packageName")],
+    indices = [Index("packageName"), Index("needsVerdict")],
 )
 data class TemplateVerdict(
     @PrimaryKey val fingerprint: String,
     val packageName: String,
+    /** When [needsVerdict] is set this is the model's lean, not a decision. */
     val verdict: Verdict,
     val reason: String,
     val source: VerdictSource,
-    /** A representative example, purely so the rule is recognisable in the UI. */
+    /** In the label queue: the model was not confident enough to decide alone. */
+    val needsVerdict: Boolean = false,
+    /** Raw log-odds at the time of the proposal, positive towards HIDE. */
+    val score: Double = 0.0,
+    /**
+     * Stored because the channel is one of the classifier's features and the
+     * fingerprint only carries it in hashed form. Without this column a labelled
+     * template could not be re-tokenised into the example that taught the model.
+     */
+    val channelId: String = "",
+    /** A representative example, so the rule is recognisable in the UI. */
     val sampleTitle: String,
     val sampleText: String,
     val updatedAt: Long = System.currentTimeMillis(),
@@ -57,11 +81,19 @@ data class TemplateVerdict(
 
 /** What happened to a notification. Only opted-in apps are ever logged. */
 enum class LogAction {
-    /** Classification is in flight; the notification is on screen (optimistic show). */
-    PENDING,
+    /** Observe mode: recorded and left completely alone. */
+    OBSERVED,
     KEPT,
     HIDDEN,
-    /** Classification failed, so the notification was left alone. */
+    /** Unsure — queued for the user's verdict. */
+    ASKED,
+
+    /**
+     * Retained so log rows written before the on-device rewrite still deserialise.
+     * Nothing produces these any more: classification no longer does I/O, so it can
+     * neither be pending nor fail.
+     */
+    PENDING,
     ERROR,
 }
 
@@ -79,7 +111,7 @@ data class LogEntry(
     val action: LogAction,
     val reason: String,
     val source: VerdictSource?,
-    /** True when the verdict came from cache rather than a fresh model call. */
+    /** True when the verdict came from the table rather than a fresh classification. */
     val fromCache: Boolean,
     val postedAt: Long = System.currentTimeMillis(),
 )

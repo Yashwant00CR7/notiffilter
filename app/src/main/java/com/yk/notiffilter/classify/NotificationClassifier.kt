@@ -1,27 +1,56 @@
 package com.yk.notiffilter.classify
 
-/** One of the user's own corrections, replayed to the model as a labelled example. */
-data class Example(val title: String, val text: String, val keep: Boolean)
-
+/** What the classifier was asked about. Everything here stays on the device. */
 data class ClassifyRequest(
-    val appLabel: String,
-    /** The user's free-text instruction for this app, handed to the model verbatim. */
-    val prose: String,
+    val packageName: String,
+    val channelId: String?,
     val title: String,
     val text: String,
-    val examples: List<Example>,
 )
 
-data class Classification(val keep: Boolean, val reason: String)
+/**
+ * The three outcomes. [UNSURE] is not a failure — it is the normal answer for a
+ * wording the user has not taught yet, and it routes to the label queue rather than
+ * to a guess.
+ */
+enum class Decision { KEEP, HIDE, UNSURE }
 
 /**
- * The seam that keeps provider choice from being a one-way door — the same
- * dependency-injection shape as agentcache's embedding providers. Nothing outside
- * this package knows which service is answering.
+ * @param lean which way the weak evidence points. Only meaningful when [decision] is
+ *   [Decision.UNSURE], where it decides whether the notification is re-posted loudly
+ *   (lean keep — a maybe-important message must still reach you) or left silent and
+ *   untouched (lean hide).
+ * @param score the raw log-odds, positive towards HIDE. Surfaced in the log so
+ *   "why did it do that" always has an answer.
+ */
+data class Classification(
+    val decision: Decision,
+    val lean: Decision,
+    val score: Double,
+    val reason: String,
+)
+
+/** One labelled example: the features of a template the user personally ruled on. */
+data class Labelled(val features: Set<String>, val keep: Boolean)
+
+/**
+ * Where training data comes from. Only the user's own verdicts train the model, so
+ * this is deliberately narrow — see [com.yk.notiffilter.data.VerdictSource].
+ */
+interface TrainingSource {
+    /** Templates in this app that the user has ruled on. */
+    suspend fun forApp(packageName: String): List<Labelled>
+
+    /** Every template the user has ruled on, in any app, as the background prior. */
+    suspend fun global(): List<Labelled>
+}
+
+/**
+ * The seam. Kept after the cloud classifier was deleted purely so [FilterEngine]'s
+ * decision logic can be unit-tested against a fake — there is no second
+ * implementation and, with INTERNET removed from the manifest, there cannot be one
+ * that leaves the device.
  */
 interface NotificationClassifier {
-    suspend fun classify(request: ClassifyRequest): Result<Classification>
-
-    /** Cheap round-trip so Settings can tell "bad key" from "bad prose". */
-    suspend fun testConnection(): Result<String>
+    suspend fun classify(request: ClassifyRequest): Classification
 }

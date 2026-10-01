@@ -14,6 +14,7 @@ import androidx.navigation.compose.rememberNavController
 import com.yk.notiffilter.ui.screens.AppPickerScreen
 import com.yk.notiffilter.ui.screens.HomeScreen
 import com.yk.notiffilter.ui.screens.LogScreen
+import com.yk.notiffilter.ui.screens.QueueScreen
 import com.yk.notiffilter.ui.screens.RuleEditorScreen
 import com.yk.notiffilter.ui.screens.SettingsScreen
 import com.yk.notiffilter.ui.theme.NotifFilterTheme
@@ -32,11 +33,22 @@ class MainActivity : ComponentActivity() {
             requestPostNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
+        // Launched from the silent queue nudge, land straight on the decisions
+        // rather than on Home — the notification made a promise about what a tap does.
+        val startAtQueue = intent?.getBooleanExtra(EXTRA_OPEN_QUEUE, false) == true
+
         setContent {
             NotifFilterTheme {
-                NotifFilterNav(rememberNavController())
+                NotifFilterNav(
+                    nav = rememberNavController(),
+                    startDestination = if (startAtQueue) Routes.QUEUE else Routes.HOME,
+                )
             }
         }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_QUEUE = "open_queue"
     }
 }
 
@@ -45,19 +57,21 @@ object Routes {
     const val PICKER = "picker"
     const val LOG = "log"
     const val SETTINGS = "settings"
+    const val QUEUE = "queue"
     const val RULE = "rule/{pkg}"
     fun rule(pkg: String) = "rule/$pkg"
 }
 
 @Composable
-fun NotifFilterNav(nav: NavHostController) {
-    NavHost(navController = nav, startDestination = Routes.HOME) {
+fun NotifFilterNav(nav: NavHostController, startDestination: String = Routes.HOME) {
+    NavHost(navController = nav, startDestination = startDestination) {
         composable(Routes.HOME) {
             HomeScreen(
                 onAddApp = { nav.navigate(Routes.PICKER) },
                 onOpenRule = { pkg -> nav.navigate(Routes.rule(pkg)) },
                 onOpenLog = { nav.navigate(Routes.LOG) },
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+                onOpenQueue = { nav.navigate(Routes.QUEUE) },
             )
         }
         composable(Routes.PICKER) {
@@ -80,6 +94,14 @@ fun NotifFilterNav(nav: NavHostController) {
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(onBack = { nav.popBackStack() })
+        }
+        composable(Routes.QUEUE) {
+            QueueScreen(
+                onBack = {
+                    // Reached directly from the nudge there is nothing to pop back to.
+                    if (!nav.popBackStack()) nav.navigate(Routes.HOME)
+                },
+            )
         }
     }
 }

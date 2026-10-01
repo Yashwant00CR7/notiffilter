@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!--
+        There is deliberately no INTERNET permission.
+
+        Classification happens entirely on this device, so the privacy claim is not a
+        policy anyone has to trust: the OS refuses to open a socket at all. It also
+        makes the guarantee regression-proof — any future code that tried to send a
+        notification anywhere would fail at runtime rather than quietly working.
+    -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
@@ -28,6 +35,7 @@
             android:name=".ui.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.NotifFilter">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

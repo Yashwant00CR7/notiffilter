@@ -134,8 +134,8 @@ private fun LogCard(entry: LogEntry, onOverride: () -> Unit) {
                     append(
                         when {
                             entry.source == VerdictSource.USER -> "your rule"
-                            entry.fromCache -> "cached"
-                            else -> "fresh call"
+                            entry.fromCache -> "known template"
+                            else -> "new template"
                         }
                     )
                 },
@@ -143,9 +143,9 @@ private fun LogCard(entry: LogEntry, onOverride: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            // One tap pins the opposite verdict for this whole template, with no API
-            // call. Nothing matching it is ever re-classified again.
-            if (entry.action == LogAction.KEPT || entry.action == LogAction.HIDDEN) {
+            // One tap pins the opposite verdict for this whole template. Nothing
+            // matching it is ever reconsidered, and the row starts training the model.
+            if (entry.action != LogAction.PENDING && entry.action != LogAction.ERROR) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onOverride) {
                         Text(
@@ -164,6 +164,9 @@ private fun ActionChip(action: LogAction) {
     val (label, color) = when (action) {
         LogAction.KEPT -> "Kept" to MaterialTheme.colorScheme.primary
         LogAction.HIDDEN -> "Hidden" to MaterialTheme.colorScheme.onSurfaceVariant
+        LogAction.ASKED -> "Asked you" to MaterialTheme.colorScheme.tertiary
+        LogAction.OBSERVED -> "Observed" to MaterialTheme.colorScheme.onSurfaceVariant
+        // Only ever seen on rows written before classification moved on-device.
         LogAction.PENDING -> "Classifying" to MaterialTheme.colorScheme.tertiary
         LogAction.ERROR -> "Shown (error)" to MaterialTheme.colorScheme.error
     }

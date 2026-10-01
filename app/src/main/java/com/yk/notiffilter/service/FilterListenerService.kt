@@ -78,6 +78,12 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
         reposter.repost(sbn, appLabel, title, text)
     }
 
+    override fun nudge(pendingCount: Int, appLabels: List<String>) {
+        reposter.nudge(pendingCount, appLabels)
+    }
+
+    override fun clearNudge() = reposter.clearNudge()
+
     companion object {
         private const val TAG = "NotifFilter"
 

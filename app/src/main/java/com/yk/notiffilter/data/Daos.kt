@@ -21,6 +21,9 @@ interface AppRuleDao {
     @Upsert
     suspend fun upsert(rule: AppRule)
 
+    @Query("UPDATE app_rules SET mode = :mode WHERE packageName = :pkg")
+    suspend fun setMode(pkg: String, mode: FilterMode)
+
     @Query("DELETE FROM app_rules WHERE packageName = :pkg")
     suspend fun delete(pkg: String)
 }
@@ -34,24 +37,42 @@ interface TemplateVerdictDao {
     suspend fun upsert(verdict: TemplateVerdict)
 
     /**
-     * Only writes a model verdict when nothing is stored yet, so an in-flight
-     * classification can never clobber a user override that landed first.
+     * Only writes a model proposal when nothing is stored yet, so a classification
+     * can never clobber a user answer that landed first.
      */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertIfAbsent(verdict: TemplateVerdict): Long
 
     /**
-     * The few-shot block: the user's own corrections, most recent first. These are
-     * what let the model generalise to templates it has never seen.
+     * The training set: templates the user personally ruled on. Model-authored rows
+     * are excluded on purpose — they are cache entries, not labels.
      */
+    @Query("SELECT * FROM template_verdicts WHERE packageName = :pkg AND source = 'USER' AND needsVerdict = 0")
+    suspend fun trainingForApp(pkg: String): List<TemplateVerdict>
+
+    @Query("SELECT * FROM template_verdicts WHERE source = 'USER' AND needsVerdict = 0")
+    suspend fun trainingGlobal(): List<TemplateVerdict>
+
+    /** The ask queue, oldest first so the backlog is cleared in the order it arrived. */
+    @Query("SELECT * FROM template_verdicts WHERE needsVerdict = 1 ORDER BY updatedAt ASC")
+    fun observeQueue(): Flow<List<TemplateVerdict>>
+
+    @Query("SELECT COUNT(*) FROM template_verdicts WHERE needsVerdict = 1")
+    suspend fun queueSize(): Int
+
+    @Query("SELECT DISTINCT packageName FROM template_verdicts WHERE needsVerdict = 1")
+    suspend fun queuedPackages(): List<String>
+
+    /** Settles a queued proposal. This, and only this, creates training data. */
     @Query(
         """
-        SELECT * FROM template_verdicts
-        WHERE packageName = :pkg AND source = 'USER'
-        ORDER BY updatedAt DESC LIMIT :limit
+        UPDATE template_verdicts
+        SET verdict = :verdict, source = 'USER', needsVerdict = 0,
+            reason = :reason, updatedAt = :now
+        WHERE fingerprint = :fingerprint
         """
     )
-    suspend fun corrections(pkg: String, limit: Int): List<TemplateVerdict>
+    suspend fun answer(fingerprint: String, verdict: Verdict, reason: String, now: Long)
 
     @Query("SELECT * FROM template_verdicts WHERE packageName = :pkg ORDER BY updatedAt DESC")
     fun observeForApp(pkg: String): Flow<List<TemplateVerdict>>
@@ -71,22 +92,7 @@ interface LogDao {
     @Insert
     suspend fun insert(entry: LogEntry): Long
 
-    @Query(
-        """
-        UPDATE notification_log
-        SET action = :action, reason = :reason, source = :source, fromCache = :fromCache
-        WHERE id = :id
-        """
-    )
-    suspend fun resolve(
-        id: Long,
-        action: LogAction,
-        reason: String,
-        source: VerdictSource,
-        fromCache: Boolean,
-    )
-
-    /** Keeps every entry sharing a fingerprint in step after a user override. */
+    /** Keeps every entry sharing a fingerprint in step after a user answer. */
     @Query(
         """
         UPDATE notification_log

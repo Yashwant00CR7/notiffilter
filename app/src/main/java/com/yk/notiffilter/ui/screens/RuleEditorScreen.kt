@@ -19,7 +19,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -39,6 +38,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yk.notiffilter.NotifFilterApp
 import com.yk.notiffilter.data.AppRule
+import com.yk.notiffilter.data.FilterMode
 import com.yk.notiffilter.ui.SystemSettings
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -47,6 +47,10 @@ class RuleEditorViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as NotifFilterApp).repository
 
     suspend fun load(pkg: String): AppRule? = repo.rule(pkg).first()
+
+    /** How many templates from this app the user has personally ruled on. */
+    suspend fun labelCount(pkg: String): Int =
+        repo.verdicts(pkg).first().count { !it.needsVerdict && it.source.name == "USER" }
 
     fun labelFor(pkg: String): String = runCatching {
         val pm = getApplication<Application>().packageManager
@@ -61,10 +65,6 @@ class RuleEditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
-private const val PROSE_HINT =
-    "Keep order status, delivery updates, and refund confirmations. " +
-        "Drop coupons, discount offers, restaurant recommendations, and re-order nudges."
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RuleEditorScreen(
@@ -76,9 +76,10 @@ fun RuleEditorScreen(
     var loaded by remember { mutableStateOf(false) }
     var isNew by remember { mutableStateOf(true) }
     var label by remember { mutableStateOf(packageName) }
-    var prose by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf(FilterMode.OBSERVE) }
     var enabled by remember { mutableStateOf(true) }
     var repost by remember { mutableStateOf(true) }
+    var labelled by remember { mutableStateOf(0) }
     var createdAt by remember { mutableStateOf(System.currentTimeMillis()) }
 
     LaunchedEffect(packageName) {
@@ -86,10 +87,11 @@ fun RuleEditorScreen(
         if (existing != null) {
             isNew = false
             label = existing.appLabel
-            prose = existing.prose
+            mode = existing.mode
             enabled = existing.enabled
             repost = existing.repostKeepers
             createdAt = existing.createdAt
+            labelled = vm.labelCount(packageName)
         } else {
             label = vm.labelFor(packageName)
         }
@@ -116,7 +118,6 @@ fun RuleEditorScreen(
         },
     ) { padding ->
         if (!loaded) return@Scaffold
-
         Column(
             Modifier
                 .fillMaxSize()
@@ -125,23 +126,47 @@ fun RuleEditorScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(packageName, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-            Text("What matters from this app", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Written in your own words and handed to the model verbatim. Be concrete " +
-                    "about both halves — what to keep and what to drop.",
+                packageName,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedTextField(
-                value = prose,
-                onValueChange = { prose = it },
-                placeholder = { Text(PROSE_HINT) },
-                minLines = 5,
-                modifier = Modifier.fillMaxWidth(),
-            )
+
+            // Observe first, filter second. A classifier that has been taught nothing
+            // has no business hiding anything, and observing costs nothing because it
+            // cannot change what you see.
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        if (mode == FilterMode.OBSERVE) "Observing" else "Filtering",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        if (mode == FilterMode.OBSERVE) {
+                            "Nothing is hidden and nothing is re-posted. Notifications from " +
+                                "$label are logged so their templates can be collected — leave " +
+                                "it here for a few days, answer the questions it gathers, then " +
+                                "turn filtering on. You have labelled $labelled so far."
+                        } else {
+                            "Templates you've answered are applied immediately. Anything the " +
+                                "model isn't confident about is queued for you instead of " +
+                                "guessed at. You have labelled $labelled template(s)."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            mode = if (mode == FilterMode.OBSERVE) FilterMode.ACTIVE
+                            else FilterMode.OBSERVE
+                        },
+                    ) {
+                        Text(
+                            if (mode == FilterMode.OBSERVE) "Start filtering"
+                            else "Back to observing"
+                        )
+                    }
+                }
+            }
 
             SwitchRow(
                 title = "Filter this app",
@@ -149,7 +174,6 @@ fun RuleEditorScreen(
                 checked = enabled,
                 onChange = { enabled = it },
             )
-
             SwitchRow(
                 title = "Re-post kept notifications",
                 subtitle = "Keepers are re-posted on a channel that makes a sound, so you can " +
@@ -158,19 +182,25 @@ fun RuleEditorScreen(
                 onChange = { repost = it },
             )
 
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Silence this app", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Filtering happens after the phone has already buzzed, so hiding junk " +
-                            "alone won't stop the interruptions. Set every channel for this app " +
-                            "to Silent — NotifFilter supplies the sound for keepers instead. " +
-                            "Android gives no way to do this for you.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    OutlinedButton(
-                        onClick = { SystemSettings.openAppNotificationSettings(context, packageName) },
-                    ) { Text("Open ${label}'s notification settings") }
+            // Only surfaced once filtering is on: silencing an app while still
+            // observing would mute real messages for no benefit at all.
+            if (mode == FilterMode.ACTIVE) {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Silence this app", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Filtering happens after the phone has already buzzed, so hiding " +
+                                "junk alone won't stop the interruptions. Set every channel for " +
+                                "this app to Silent — NotifFilter supplies the sound for keepers " +
+                                "instead. Android gives no way to do this for you.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                SystemSettings.openAppNotificationSettings(context, packageName)
+                            },
+                        ) { Text("Open ${label}'s notification settings") }
+                    }
                 }
             }
 
@@ -180,7 +210,7 @@ fun RuleEditorScreen(
                         AppRule(
                             packageName = packageName,
                             appLabel = label,
-                            prose = prose.trim(),
+                            mode = mode,
                             enabled = enabled,
                             repostKeepers = repost,
                             createdAt = createdAt,
@@ -188,7 +218,6 @@ fun RuleEditorScreen(
                     )
                     onBack()
                 },
-                enabled = prose.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(if (isNew) "Add app" else "Save") }
         }
@@ -207,8 +236,8 @@ private fun SwitchRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
