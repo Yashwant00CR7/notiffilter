@@ -3,7 +3,8 @@
 [![Android](https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026%2B)-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/compose)
-[![Privacy](https://img.shields.io/badge/Privacy-100%25%20On--Device%20(No%20Internet)-brightgreen?logo=shield)](file:///Users/ykanagaraj/Downloads/Personal%20Projects/notiffilter/app/src/main/AndroidManifest.xml)
+[![Privacy](https://img.shields.io/badge/Privacy-100%25%20On--Device%20(No%20Internet)-brightgreen?logo=shield)](app/src/main/AndroidManifest.xml)
+[![Release](https://img.shields.io/github/v/release/Yashwant00CR7/notiffilter?logo=github&color=blue)](https://github.com/Yashwant00CR7/notiffilter/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 An intelligent, 100% offline Android notification filter that learns from your decisions to silence marketing spam while ensuring important alerts (order updates, delivery tracking, critical status) always ring through.
@@ -112,7 +113,7 @@ flowchart TD
 ## Quick Start & How to Use
 
 ### 1. Installation
-Install the APK on your device running Android 8.0 (Oreo) or higher.
+Download the latest APK (`NotifFilter-vX.X.X.apk`) from the **[Releases Page](https://github.com/Yashwant00CR7/notiffilter/releases)** and install it on your device running Android 8.0 (Oreo / API 26) or higher. Alternatively, build directly from source using `./gradlew assembleDebug`.
 
 ### 2. Grant Initial Permissions
 When opening the app for the first time, you will be guided to grant:
