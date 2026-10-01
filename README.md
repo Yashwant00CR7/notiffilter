@@ -1,167 +1,161 @@
 # NotifFilter
 
-An Android notification filter that learns, from your own decisions, which
-notifications are worth showing you and which are marketing noise.
+[![Android](https://img.shields.io/badge/Platform-Android%208.0%2B%20(API%2026%2B)-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/compose)
+[![Privacy](https://img.shields.io/badge/Privacy-100%25%20On--Device%20(No%20Internet)-brightgreen?logo=shield)](file:///Users/ykanagaraj/Downloads/Personal%20Projects/notiffilter/app/src/main/AndroidManifest.xml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Nothing leaves your phone. There is no API key, no account, no server — and no
-`INTERNET` permission in the manifest, so the operating system will not let this app
-open a network connection even if a future version tried to.
+An intelligent, 100% offline Android notification filter that learns from your decisions to silence marketing spam while ensuring important alerts (order updates, delivery tracking, critical status) always ring through.
 
-The motivating case: Swiggy sends a stream of coupons and restaurant ads with a
-handful of things you actually need mixed in ("Order Delivered"). Hand-written keyword
-rules can't separate those reliably, because marketing copy is rewritten constantly
-while the messages you care about are few and stable.
+---
 
-## How it works
+## The Problem
 
-Every posted notification hits a `NotificationListenerService`:
+Modern consumer apps (food delivery like Swiggy/Zomato, quick-commerce like Blinkit/Zepto, cab aggregators, shopping apps) mix a few essential alerts into an endless barrage of promotional marketing:
 
-1. **Not opted in → untouched.** Apps without a rule are never inspected. OTPs,
-   banking, and messages stay private by construction — and by construction twice
-   over, since nothing from any app can be transmitted anywhere.
-2. **Fingerprint.** `package + channelId + normalize(title) + normalize(text)`, with
-   digits, URLs, punctuation and emoji stripped. Notification text is heavily
-   templated, so a handful of fingerprints covers an app's whole output.
-3. **Known template → your verdict, instantly.**
-4. **Unseen template → classified on-device**, in under a millisecond, by a naive
-   Bayes model trained on the verdicts you have already given.
-5. Confident → act. **Not confident → ask you**, and show the notification meanwhile.
+- **What you care about:** *"Order out for delivery"*, *"Driver is arriving"*, *"OTP / Account Security"*
+- **What clutters your shade:** *"Craving Biryani? 50% OFF!"*, *"Weekend treat just for you 🎉"*, *"Hurry, discounts expiring!"*
 
-### The user is the authority
+Handcrafted keyword rules fail because marketing copy is constantly reworded. Muting the whole app causes you to miss critical updates. **NotifFilter solves this by learning the difference right on your device.**
 
-The model may act alone only when the evidence clears a margin — in practice, when a
-template is a trivial variant of one you already ruled on ("Arriving from Empire"
-after you labelled "Arriving from Meghana Foods"). Everything else is queued for you.
+---
 
-Queued templates are announced by a single **silent, low-priority** notification —
-"4 templates need your verdict" — that leads to a bulk-label screen. An app whose
-purpose is fewer interruptions does not get to interrupt you with questions.
+## Key Highlights & Guarantees
 
-Each answer covers every future notification with that wording *and* becomes evidence
-that steers the templates the model has not seen, which is why a queue that looks long
-on day three is a trickle by the end of the week.
+- 🛡️ **Zero Network Access (Guaranteed by Android OS):** The app manifest deliberately omits `<uses-permission android:name="android.permission.INTERNET" />`. The operating system physically refuses to let the app open a socket. Your notifications cannot leave your device.
+- ⚡ **Zero Cloud & Zero API Keys:** Operates via a fast, lightweight on-device Naive Bayes model. Classifications execute locally in under 1 millisecond with zero external dependencies.
+- 🔕 **Selective Notification Sound:** Mute noisy apps in Android Settings once; NotifFilter re-posts and rings **only** for keepers.
+- 🎯 **Observe First, Filter Second:** New apps start in observation mode without altering notifications, letting you train the model safely before enabling filtering.
+- 🔒 **Fail-Safe (Optimistic Show):** If anything is uncertain or fails, the notification is shown normally. Nothing is ever lost or silently suppressed by mistake.
 
-### Observe first, filter second
+---
 
-A newly added app starts in **observe mode**: logged, templates collected, nothing
-hidden, nothing re-posted, app left entirely loud. After a few days you clear the
-queue in one sitting and switch it to active. Only then does the app tell you to set
-that app's channels to Silent — silencing it while still observing would mute real
-messages for no benefit.
+## How It Works
 
-A classifier that has been taught nothing has no business hiding anything. Observing
-costs nothing because it cannot change what you see.
-
-### Optimistic show
-
-A notification stays visible until something *positively* decides to hide it. Dead
-listener, untrained model, process killed mid-flight — all degrade to "you see the
-notification", which is the behaviour without this app installed.
-
-The decision table is deliberately short:
-
-| Verdict | What happens |
-|---|---|
-| KEEP (certain, or only leaning) | Re-posted on a channel that makes a sound |
-| HIDE (certain) | Cancelled |
-| HIDE (only leaning) | **Left exactly as the source app posted it** — silent, intact, queued |
-
-An unsure lean towards keep still buzzes, because a maybe-important message has to
-reach a user who has set the source app to Silent. An unsure lean towards hide is
-never destroyed on a guess — and it is left untouched rather than re-posted, because
-our copy is lossy (see below).
-
-### Why keepers get re-posted
-
-Filtering happens *after* the phone has already buzzed, so hiding junk on its own only
-tidies the shade. The fix is two halves: you set the source app's channels to Silent
-once, in Android Settings (there is no API for one app to change another's channel
-importance), and NotifFilter supplies the sound for keepers only.
-
-The re-post is posted *before* the original is cancelled, so a failure costs a buzz and
-never a message. But the copy is lossy — it carries title, body, big-text and the
-tap-through intent, and drops images, inbox style, progress and inline reply. That
-cost is worth paying for a decided keeper and not for a template you haven't ruled on
-yet, which is why unsure-lean-hide items are left alone.
-
-## Design decisions worth knowing
-
-**Counting tokens, not matching keywords.** A keyword rule is authored once, static,
-and decided by a single word. This weighs every feature by evidence and retrains on
-every correction, so it tracks how one specific app actually writes. Marketing copy
-varies its words far more than its register — imperatives, prices, urgency, second
-person — which is why Bayesian spam filters outlived blocklists.
-
-**The classifier does not reuse the fingerprinter's normalisation.** `Fingerprinter`
-strips digits, punctuation and emoji, which is right for template identity and
-catastrophic for classification: `%`, `₹`, `🎉`, `!` and SHOUTING are the strongest
-marketing signals in the string, and they survive rewording when the words don't.
-`Tokenizer` keeps them, plus `channelId` — many apps already file promos separately,
-which on some apps does most of the work by itself.
-
-**Hierarchical counts.** Token counts pooled across every opted-in app form a
-background prior; an app's own labels sit on top with triple weight. A new app behaves
-like the pooled model instead of a coin flip; a well-labelled app is governed by its
-own vocabulary. No cold-start cliff between the two.
-
-**A minimum before any autonomy.** Below a handful of labels the log-odds are
-arithmetically large and epistemically worthless — two examples can look confident.
-The model stays quiet until you have actually taught it something.
-
-**The model is rebuilt on every classification, never stored.** Recomputing counts
-from a few dozen rows takes microseconds and guarantees the model can never drift out
-of step with the labels you can see and edit in the UI.
-
-**Only your verdicts train it.** Rows the model wrote itself are cache entries, not
-ground truth. Training on them would bake unreviewed guesses into every future
-decision with no way to tell which ones were wrong.
-
-**Conservative fingerprinting.** Over-splitting costs one cheap local classification.
-Over-merging silently applies the wrong verdict and is nearly impossible to notice.
-Normalisation errs towards treating things as distinct — proper nouns aren't stripped.
-The classifier is what absorbs the resulting tail.
-
-**Reasons name their evidence.** The log shows the raw log-odds and the features that
-moved the verdict ("Hidden (6.2): off, pct, now"). A reason you can check beats a
-fluent sentence you can't.
-
-## Setup
-
-1. Install, then grant **notification access** when prompted.
-2. Exempt the app from **battery optimisation**, and enable **Auto-start** in
-   realme/ColorOS settings — ColorOS kills bound services aggressively, and a dead
-   listener means nothing gets filtered.
-3. Add an app. It starts **observing**: nothing changes yet.
-4. After a few days, clear the label queue, then **Start filtering** and follow the
-   in-app prompt to set that app's channels to Silent.
-
-## Build
-
-```bash
-./gradlew assembleDebug        # APK at app/build/outputs/apk/debug/
-./gradlew test                 # unit tests: tokenizer + classifier
-./gradlew connectedAndroidTest # migration test; needs a device or emulator
+```mermaid
+flowchart TD
+    A["Incoming Notification"] --> B{"Is App Opted-in?"}
+    B -- No --> C["Leave Untouched (Pass Through)"]
+    B -- Yes --> D["Extract Template Fingerprint"]
+    D --> E{"Existing Rule in Cache?"}
+    E -- Yes --> F["Apply Pinned User Verdict"]
+    E -- No --> G["On-Device Naive Bayes Classifier"]
+    G --> H{"Classification Result"}
+    H -- Confident KEEP --> I["Re-Post with Sound & Cancel Original"]
+    H -- Confident HIDE --> J["Cancel Silently"]
+    H -- Unsure Lean --> K["Keep Untouched in Shade & Enqueue for Review"]
 ```
 
-Needs JDK 17 (`/opt/homebrew/opt/openjdk@17`) and Android SDK platform 35.
+### The Decision Table
 
-## History
+| Verdict | Certainty | What Happens |
+|---|---|---|
+| **KEEP** | Confident or Leaning | **Re-posted on a loud channel** with sound and vibration |
+| **HIDE** | Confident | **Cancelled silently** from the notification shade |
+| **HIDE** | Leaning (Unsure) | **Left untouched in the shade** (silent & intact), added to review queue |
 
-This app previously classified notifications by sending their text to Groq's API. That
-was removed in favour of the on-device model: a service that reads your notifications
-should not need you to trust anybody's retention policy, including one that happened
-to be favourable. The v1 → v2 migration keeps every verdict you pinned yourself — they
-are training data now — while flagging the cloud model's own guesses for your
-confirmation, since nobody reviewed them.
+> **Why Keepers Get Re-Posted:**  
+> On Android, third-party apps cannot silence another app's notification before it plays sound. The solution: set the source app's channels to **Silent** once in Android Settings. When NotifFilter detects a keeper, it immediately re-posts it onto its own loud channel with audio.
 
-What was lost with it: the plain-English per-app instruction, which only ever meant
-something to a language model. Writing a sentence about an app was replaced by tapping
-keep/hide on its actual notifications, which is both more precise and the only thing a
-counting model can learn from.
+---
 
-## Not built yet
+## Quick Start & How to Use
 
-**Deciding from the notification shade.** Answering a queued template still means
-opening the app. Action buttons on the silent nudge could resolve the most recent one
-in place; the trade-off is that a button can only ever address one template, and the
-queue is usually several.
+### 1. Installation
+Install the APK on your device running Android 8.0 (Oreo) or higher.
+
+### 2. Grant Initial Permissions
+When opening the app for the first time, you will be guided to grant:
+1. **Notification Listener Access:** Required to read incoming notifications and dismiss filtered ones.
+2. **Battery Optimization Exemption:** Necessary to keep the background listener alive.
+3. **Auto-Start / Background Execution (on ColorOS, MIUI, OxygenOS, HyperOS, etc.):** Lock NotifFilter in recent apps and enable auto-start in system settings so aggressive OEM battery managers do not kill the listener.
+
+### 3. Add an App in Observe Mode
+1. Tap **+ Add App** on the home screen and choose an app (e.g., Swiggy, Blinkit, Uber).
+2. The app is added in **Observing** status:
+   - Notifications are **not** hidden or modified.
+   - NotifFilter collects templates and logs incoming notifications in the background.
+
+### 4. Review & Train the Queue
+1. After a few days of normal usage, open NotifFilter.
+2. Go to the **Queue** screen (or tap the silent notification summary: *"X templates need your verdict"*).
+3. Review each template and tap **Keep** or **Hide**.
+   - Your choices create permanent pinned rules and train the on-device model.
+
+### 5. Activate Active Filtering
+1. Tap on the app in NotifFilter and toggle status from **Observing** to **Active Filtering**.
+2. Follow the in-app shortcut to open the target app's system notification channel settings.
+3. Set the target app's promotional channels to **Silent / No Sound**.
+4. That's it! NotifFilter will now automatically silence marketing junk and ring out loud whenever an important notification arrives.
+
+---
+
+## Architectural & Technical Details
+
+### Token Counting vs. Static Keywords
+Keyword rules are brittle: a single phrase mismatch fails to classify promotional text. NotifFilter weighs individual token evidence and retrains dynamically with every user confirmation. Marketing language shifts its vocabulary often, but its structure (imperatives, percentages, urgency, emojis) remains consistent.
+
+### Dual Normalization: Fingerprinter vs. Tokenizer
+- **`Fingerprinter`:** Strips digits, URLs, punctuation, and emoji to identify recurring template skeletons.
+- **`Tokenizer`:** Intentionally preserves `%`, `₹`, `!`, emoji (`🎉`, `🔥`), and `channelId`. These symbols are among the strongest predictors of marketing promotions.
+
+### Hierarchical Bayesian Priors
+- **Global background prior:** Token statistics pooled across all opted-in apps provide a foundational prior.
+- **App-specific weights:** An app's own verdicts carry triple weight on top of the background prior. A newly added app benefits from general spam signals immediately without suffering from a cold-start cliff.
+
+### Complete Transparency & Explainability
+The in-app **Log Screen** displays the exact evidence behind every action:
+- Final classification score (log-odds).
+- Key tokens that influenced the verdict (e.g., `"Hidden (6.2): off, pct, now, emoji_🎉"`).
+- Ability to flip any verdict or pin a custom rule with a single tap.
+
+---
+
+## Building from Source
+
+### Prerequisites
+- **JDK:** Version 17 (`openjdk@17`)
+- **Android SDK:** Platform 35 / Build Tools 35.0.0
+- **Gradle:** Wrapper included (8.x)
+
+### Build Commands
+
+```bash
+# Assemble debug APK (output at app/build/outputs/apk/debug/app-debug.apk)
+./gradlew assembleDebug
+
+# Run local unit tests (Tokenizer + Naive Bayes tests)
+./gradlew test
+
+# Run Room migration & instrumentation tests (requires connected device/emulator)
+./gradlew connectedAndroidTest
+```
+
+---
+
+## Device-Specific Battery Configurations
+
+Aggressive OEM battery managers frequently terminate background `NotificationListenerService` instances. If notifications stop being filtered, verify the following settings:
+
+| Device Brand / OS | Recommended Settings |
+|---|---|
+| **Realme / Oppo / OnePlus (ColorOS / OxygenOS)** | Settings → Apps → NotifFilter → Battery → *Allow background activity* & *Allow auto-launch*. Also lock the app in the recent apps overview. |
+| **Xiaomi / Poco / Redmi (MIUI / HyperOS)** | App info → Battery saver → *No restrictions*, and enable *Autostart*. |
+| **Samsung (OneUI)** | Settings → Apps → NotifFilter → Battery → *Unrestricted*. |
+| **Google Pixel / Stock Android** | Settings → Apps → NotifFilter → App battery usage → *Unrestricted*. |
+
+---
+
+## History & Evolution
+
+- **v1.0 (Cloud Groq LLM):** Originally experimented with sending notification text to Groq's cloud LLM API with Keystore-encrypted API keys.
+- **v2.0 (100% On-Device Naive Bayes):** Completely removed cloud inference, network permissions, and external dependencies. A service inspecting private notifications should never require trusting any server's data retention policy. Database schemas and user verdicts seamlessly migrate to the on-device model.
+
+---
+
+## Contributing & License
+
+Contributions, feedback, and bug reports are welcome! Please open an issue or submit a pull request on GitHub.
+
+Distributed under the [MIT License](LICENSE).

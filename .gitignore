@@ -9,7 +9,7 @@ app/build/
 # Machine-specific SDK path
 local.properties
 
-# Secrets never belong here; the Groq key is entered in-app and Keystore-encrypted.
+# Keystores and signing keys
 *.keystore
 *.jks
 
