@@ -43,6 +43,9 @@ import com.yk.notiffilter.ui.SystemSettings
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+import androidx.compose.runtime.collectAsState
+import com.yk.notiffilter.data.NotificationRule
+
 class RuleEditorViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as NotifFilterApp).repository
 
@@ -62,6 +65,20 @@ class RuleEditorViewModel(app: Application) : AndroidViewModel(app) {
     fun delete(pkg: String, then: () -> Unit) = viewModelScope.launch {
         repo.deleteRule(pkg)
         then()
+    }
+
+    fun customRules(pkg: String) = repo.notificationRulesForApp(pkg)
+
+    fun saveNotificationRule(rule: NotificationRule) = viewModelScope.launch {
+        repo.saveNotificationRule(rule)
+    }
+
+    fun deleteNotificationRule(id: Long) = viewModelScope.launch {
+        repo.deleteNotificationRule(id)
+    }
+
+    fun toggleNotificationRule(rule: NotificationRule) = viewModelScope.launch {
+        repo.saveNotificationRule(rule.copy(enabled = !rule.enabled))
     }
 }
 
@@ -202,6 +219,52 @@ fun RuleEditorScreen(
                         ) { Text("Open ${label}'s notification settings") }
                     }
                 }
+            }
+
+            val customRules by vm.customRules(packageName).collectAsState(initial = emptyList())
+            var showAddRuleDialog by remember { mutableStateOf(false) }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Custom Rules", style = MaterialTheme.typography.titleMedium)
+                OutlinedButton(onClick = { showAddRuleDialog = true }) {
+                    Text("+ Add Rule")
+                }
+            }
+            Text(
+                "App-specific keyword, regex, or channel rules that override the classifier for $label.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            if (customRules.isEmpty()) {
+                Text(
+                    "No custom rules for this app. Global rules and the AI model handle its filtering.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                customRules.forEach { customRule ->
+                    RuleItemCard(
+                        rule = customRule,
+                        onToggle = { vm.toggleNotificationRule(customRule) },
+                        onDelete = { vm.deleteNotificationRule(customRule.id) },
+                    )
+                }
+            }
+
+            if (showAddRuleDialog) {
+                AddRuleDialog(
+                    packageName = packageName,
+                    onDismiss = { showAddRuleDialog = false },
+                    onSave = { newRule ->
+                        vm.saveNotificationRule(newRule)
+                        showAddRuleDialog = false
+                    },
+                )
             }
 
             Button(

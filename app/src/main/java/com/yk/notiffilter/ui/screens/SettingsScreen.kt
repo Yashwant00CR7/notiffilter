@@ -80,7 +80,11 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onOpenGlobalRules: () -> Unit = {},
+    vm: SettingsViewModel = viewModel(),
+) {
     val context = LocalContext.current
     var listenerEnabled by remember { mutableStateOf(FilterListenerService.isEnabled(context)) }
 
@@ -185,6 +189,22 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                     )
                     OutlinedButton(onClick = { SystemSettings.requestBatteryExemption(context) }) {
                         Text("Battery settings")
+                    }
+                }
+            }
+
+            Text("Rule Engine", style = MaterialTheme.typography.titleMedium)
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Global Rules", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Manage whitelist and blacklist rules that apply across all apps. " +
+                            "Protect OTPs and deliveries, or block recurring marketing spam keywords.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedButton(onClick = onOpenGlobalRules) {
+                        Text("Manage Global Rules")
                     }
                 }
             }

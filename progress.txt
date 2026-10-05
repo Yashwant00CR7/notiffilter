@@ -24,3 +24,8 @@ Status: In Progress
 - Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed 100%.
 - Notes: Allows user to backup their rules and learned verdicts to JSON and restore seamlessly across app rebuilds.
 --------------------------------------------------
+[2026-10-05 17:10:45] Completed Task 5: Rule Management UI (App Rule Editor & Global Rules)
+- Changes: Built GlobalRulesScreen with search/filter (All/Keep/Hide), AddRuleDialog, toggle switch, and delete functionality. Integrated custom rules section into RuleEditorScreen allowing users to configure app-specific rules with add/delete/toggle. Wired GLOBAL_RULES route into MainActivity navigation and SettingsScreen.
+- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed 100%.
+- Notes: Provides intuitive UI for managing deterministic Whitelist and Blacklist rules both globally and per app.
+--------------------------------------------------

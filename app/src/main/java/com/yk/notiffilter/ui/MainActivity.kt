@@ -12,6 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.yk.notiffilter.ui.screens.AppPickerScreen
+import com.yk.notiffilter.ui.screens.GlobalRulesScreen
 import com.yk.notiffilter.ui.screens.HomeScreen
 import com.yk.notiffilter.ui.screens.LogScreen
 import com.yk.notiffilter.ui.screens.QueueScreen
@@ -58,6 +59,7 @@ object Routes {
     const val LOG = "log"
     const val SETTINGS = "settings"
     const val QUEUE = "queue"
+    const val GLOBAL_RULES = "global_rules"
     const val RULE = "rule/{pkg}"
     fun rule(pkg: String) = "rule/$pkg"
 }
@@ -92,8 +94,14 @@ fun NotifFilterNav(nav: NavHostController, startDestination: String = Routes.HOM
         composable(Routes.LOG) {
             LogScreen(onBack = { nav.popBackStack() })
         }
+        composable(Routes.GLOBAL_RULES) {
+            GlobalRulesScreen(onBack = { nav.popBackStack() })
+        }
         composable(Routes.SETTINGS) {
-            SettingsScreen(onBack = { nav.popBackStack() })
+            SettingsScreen(
+                onBack = { nav.popBackStack() },
+                onOpenGlobalRules = { nav.navigate(Routes.GLOBAL_RULES) },
+            )
         }
         composable(Routes.QUEUE) {
             QueueScreen(
