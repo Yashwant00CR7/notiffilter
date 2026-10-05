@@ -29,3 +29,9 @@ Status: In Progress
 - Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed 100%.
 - Notes: Provides intuitive UI for managing deterministic Whitelist and Blacklist rules both globally and per app.
 --------------------------------------------------
+[2026-10-05 17:11:45] Completed Task 6: Full Verification, Documentation & APK Assembly
+- Changes: Updated README.md documenting the 4-tier decision hierarchy and Backup & Restore features. Assembled new debug APK at notiffilter-debug.apk. Verified full test suite.
+- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test and ./gradlew assembleDebug passed 100%.
+- Notes: All 6 PRD tasks completed.
+--------------------------------------------------
+RALPH_COMPLETE

@@ -81,32 +81,45 @@ Tune how conservative or aggressive the classification engine is:
 
 ---
 
-## How It Works
+## How It Works: Hybrid Rule + Bayesian AI Engine
+
+NotifFilter uses an optimized 4-tier hybrid pipeline that combines deterministic safety and precision with on-device Bayesian machine learning:
 
 ```mermaid
 flowchart TD
     A["Incoming Notification"] --> B{"Is App Opted-in?"}
     B -- No --> C["Leave Untouched (Pass Through)"]
-    B -- Yes --> D["Extract Template Fingerprint"]
-    D --> E{"Existing Rule in Cache?"}
-    E -- Yes --> F["Apply Pinned User Verdict"]
-    E -- No --> G["On-Device Naive Bayes Classifier"]
-    G --> H{"Classification Result"}
-    H -- Confident KEEP --> I["Re-Post with Sound & Cancel Original"]
-    H -- Confident HIDE --> J["Cancel Silently"]
-    H -- Unsure Lean --> K["Keep Untouched in Shade & Enqueue for Review"]
+    B -- Yes --> D{"Tier 1: Pinned User Template?"}
+    D -- Hit --> E["Apply User's Pinned Verdict"]
+    D -- Miss --> F{"Tier 2: Whitelist KEEP Rule?<br>(OTP, Delivery, Banking)"}
+    F -- Matched --> G["Re-Post with Sound & Cancel Original"]
+    F -- No --> H{"Tier 3: Blacklist HIDE Rule?<br>(% off, cashback, promo channels)"}
+    H -- Matched --> I["Cancel Silently"]
+    H -- No --> J{"Tier 4: Tuned Bayesian Classifier"}
+    J -- Confident KEEP --> G
+    J -- Confident HIDE --> I
+    J -- Unsure Lean --> K["Keep Untouched in Shade & Enqueue for Review"]
 ```
 
-### The Decision Table
+### The 4-Tier Decision Hierarchy
 
-| Verdict | Certainty | What Happens |
+| Tier | Evaluation Stage | Behavior |
 |---|---|---|
-| **KEEP** | Confident or Leaning | **Re-posted on a loud channel** with sound and vibration |
-| **HIDE** | Confident | **Cancelled silently** from the notification shade |
-| **HIDE** | Leaning (Unsure) | **Left untouched in the shade** (silent & intact), added to review queue |
+| **Tier 1** | **Pinned User Verdicts** | Ground truth from your prior answers in the Queue or Log. Absolute priority. |
+| **Tier 2** | **Whitelist KEEP Rules** | Deterministic keywords, regex, or channels (e.g. `OTP`, `out for delivery`, `driver arriving`, `debited`). **Guaranteed KEEP** — re-posted loudly, original cancelled. Critical alerts can never be hidden. |
+| **Tier 3** | **Blacklist HIDE Rules** | Deterministic keywords, regex, or channels (e.g. `% off`, `flat ₹`, `cashback`, `use code`, promo channels). **Guaranteed HIDE** — cancelled silently before reaching your shade. |
+| **Tier 4** | **Tuned Bayesian Classifier** | On-device Naive Bayes model for unseen copy. Confident decisions act autonomously; unsure copy remains untouched in the shade and is queued for your review. |
 
 > **Why Keepers Get Re-Posted:**  
 > On Android, third-party apps cannot silence another app's notification before it plays sound. The solution: set the source app's channels to **Silent** once in Android Settings. When NotifFilter detects a keeper, it immediately re-posts it onto its own loud channel with audio.
+
+---
+
+## Session Data & Backup / Restore
+
+- 💾 **In-App JSON Backup & Restore:** In **Settings → Backup & Session Data**, tap **Export Backup** to save all your opted-in apps, custom keyword/channel rules, and learned template verdicts into a clean JSON file.
+- 🔄 **Effortless Rebuild Restoration:** When upgrading or reinstalling the app, tap **Import Backup** to restore your entire training session in 1 tap without losing any manual verdicts.
+- ⚙️ **Global & Per-App Rule Management:** Manage shared global rules from **Settings → Global Rules**, or add custom keyword/channel overrides for specific apps directly from the **App Rule Editor**.
 
 ---
 
