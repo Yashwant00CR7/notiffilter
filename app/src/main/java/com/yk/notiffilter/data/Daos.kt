@@ -108,3 +108,45 @@ interface LogDao {
     @Query("DELETE FROM notification_log")
     suspend fun clear()
 }
+
+@Dao
+interface NotificationRuleDao {
+    @Query("SELECT * FROM notification_rules ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<NotificationRule>>
+
+    @Query("SELECT * FROM notification_rules WHERE packageName IS NULL ORDER BY createdAt DESC")
+    fun observeGlobal(): Flow<List<NotificationRule>>
+
+    @Query("SELECT * FROM notification_rules WHERE packageName = :pkg ORDER BY createdAt DESC")
+    fun observeForApp(pkg: String): Flow<List<NotificationRule>>
+
+    @Query("SELECT * FROM notification_rules WHERE enabled = 1 AND (packageName IS NULL OR packageName = :pkg)")
+    suspend fun getActiveRulesForApp(pkg: String): List<NotificationRule>
+
+    @Query("SELECT * FROM notification_rules WHERE enabled = 1")
+    suspend fun getAllActiveRules(): List<NotificationRule>
+
+    @Query("SELECT * FROM notification_rules WHERE enabled = 1")
+    fun observeAllActive(): Flow<List<NotificationRule>>
+
+    @Query("SELECT COUNT(*) FROM notification_rules")
+    suspend fun count(): Int
+
+    @Query("SELECT * FROM notification_rules WHERE id = :id")
+    suspend fun find(id: Long): NotificationRule?
+
+    @Upsert
+    suspend fun upsert(rule: NotificationRule): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(rules: List<NotificationRule>)
+
+    @Query("DELETE FROM notification_rules WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("DELETE FROM notification_rules WHERE packageName = :pkg")
+    suspend fun deleteForApp(pkg: String)
+
+    @Query("DELETE FROM notification_rules")
+    suspend fun clearAll()
+}

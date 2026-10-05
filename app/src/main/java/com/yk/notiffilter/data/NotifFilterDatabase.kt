@@ -21,11 +21,14 @@ class Converters {
 
     @TypeConverter fun modeToString(v: FilterMode?): String? = v?.name
     @TypeConverter fun stringToMode(s: String?): FilterMode? = s?.let(FilterMode::valueOf)
+
+    @TypeConverter fun matchTargetToString(m: MatchTarget?): String? = m?.name
+    @TypeConverter fun stringToMatchTarget(s: String?): MatchTarget? = s?.let(MatchTarget::valueOf)
 }
 
 @Database(
-    entities = [AppRule::class, TemplateVerdict::class, LogEntry::class],
-    version = 2,
+    entities = [AppRule::class, TemplateVerdict::class, LogEntry::class, NotificationRule::class],
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -33,6 +36,7 @@ abstract class NotifFilterDatabase : RoomDatabase() {
     abstract fun appRules(): AppRuleDao
     abstract fun verdicts(): TemplateVerdictDao
     abstract fun log(): LogDao
+    abstract fun notificationRules(): NotificationRuleDao
 
     companion object {
         @Volatile private var instance: NotifFilterDatabase? = null
@@ -91,12 +95,47 @@ abstract class NotifFilterDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v2 → v3: Add notification_rules table for deterministic Whitelist/Blacklist matching.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS notification_rules (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        packageName TEXT,
+                        pattern TEXT NOT NULL,
+                        isRegex INTEGER NOT NULL,
+                        matchTarget TEXT NOT NULL,
+                        verdict TEXT NOT NULL,
+                        enabled INTEGER NOT NULL,
+                        description TEXT,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_notification_rules_packageName " +
+                        "ON notification_rules (packageName)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_notification_rules_verdict " +
+                        "ON notification_rules (verdict)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_notification_rules_enabled " +
+                        "ON notification_rules (enabled)"
+                )
+            }
+        }
+
         fun get(context: Context): NotifFilterDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 NotifFilterDatabase::class.java,
                 "notiffilter.db",
-            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
         }
     }
 }

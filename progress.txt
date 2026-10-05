@@ -1,0 +1,11 @@
+# Ralph Loop Progress Log
+Started: 2026-10-05 16:56:45
+Task File: PRD.md
+Backpressure: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test
+Status: In Progress
+--------------------------------------------------
+[2026-10-05 17:00:00] Completed Task 1: Database Schema Expansion & Migration 2->3
+- Changes: Added MatchTarget enum and NotificationRule entity to Entities.kt, NotificationRuleDao to Daos.kt, updated NotifFilterDatabase to v3 with MIGRATION_2_3, and generated Room schema 3.json.
+- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed cleanly.
+- Notes: Backward compatibility preserved with hand-written MIGRATION_2_3 and full indexing.
+--------------------------------------------------

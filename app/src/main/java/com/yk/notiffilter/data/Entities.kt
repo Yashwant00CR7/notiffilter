@@ -115,3 +115,40 @@ data class LogEntry(
     val fromCache: Boolean,
     val postedAt: Long = System.currentTimeMillis(),
 )
+
+/** Where in the notification to search for a pattern match. */
+enum class MatchTarget {
+    /** Searches both title and text. */
+    ANY,
+    TITLE,
+    TEXT,
+    CHANNEL,
+}
+
+/**
+ * An explicit, deterministic rule.
+ *
+ * Runs before the Bayesian model. A Whitelist (KEEP) rule ensures critical transactional
+ * notifications (OTPs, delivery tracking, banking alerts) can never be hidden. A Blacklist
+ * (HIDE) rule silences marketing spam that rewords around statistical models.
+ *
+ * If [packageName] is null, this rule applies globally to all opted-in apps.
+ * If [packageName] is set, this rule only applies to notifications from that specific package.
+ */
+@Entity(
+    tableName = "notification_rules",
+    indices = [Index("packageName"), Index("verdict"), Index("enabled")],
+)
+data class NotificationRule(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** Null for global rules; specific package for app-scoped rules. */
+    val packageName: String? = null,
+    /** Keyword/phrase or regex pattern. */
+    val pattern: String,
+    val isRegex: Boolean = false,
+    val matchTarget: MatchTarget = MatchTarget.ANY,
+    val verdict: Verdict = Verdict.HIDE,
+    val enabled: Boolean = true,
+    val description: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+)
