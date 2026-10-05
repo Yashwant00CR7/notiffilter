@@ -19,7 +19,7 @@ class NotifFilterApp : Application() {
         super.onCreate()
         CoroutineScope(Dispatchers.IO).launch {
             runCatching {
-                DefaultRules.preseedIfEmpty(db.notificationRules())
+                DefaultRules.preseedIfEmpty(db)
             }
         }
     }

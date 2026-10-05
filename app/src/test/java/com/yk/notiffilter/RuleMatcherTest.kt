@@ -201,4 +201,68 @@ class RuleMatcherTest {
         assertTrue(spam.matched)
         assertEquals(Verdict.HIDE, spam.verdict)
     }
+
+    @Test
+    fun `user session spam notifications from Swiggy and ICICI Direct are caught by rules`() {
+        val rules = DefaultRules.rules
+
+        // Swiggy MoEngage channel
+        val swiggyMoe = RuleMatcher.match(
+            rules = rules,
+            packageName = "in.swiggy.android",
+            channelId = "moe_default_channel",
+            title = "Treats, with plot twists!",
+            text = "Explore naturally sweetened & unsweetened options. 💗🧁",
+        )
+        assertTrue(swiggyMoe.matched)
+        assertEquals(Verdict.HIDE, swiggyMoe.verdict)
+
+        // Swiggy conversational spam
+        val swiggyChai = RuleMatcher.match(
+            rules = rules,
+            packageName = "in.swiggy.android",
+            channelId = "other_channel",
+            title = "Running on chai & hope? 🫠",
+            text = "Please get yourself something proper to eat.",
+        )
+        assertTrue(swiggyChai.matched)
+        assertEquals(Verdict.HIDE, swiggyChai.verdict)
+
+        // ICICI Direct webinar channel
+        val iciciChannel = RuleMatcher.match(
+            rules = rules,
+            packageName = "com.icicidirect.idirectsuper",
+            channelId = "your channel id",
+            title = "Tune in to Nifty Ki Baat",
+            text = "",
+        )
+        assertTrue(iciciChannel.matched)
+        assertEquals(Verdict.HIDE, iciciChannel.verdict)
+
+        // ICICI Direct promotional copy
+        val iciciPromo = RuleMatcher.match(
+            rules = rules,
+            packageName = "com.icicidirect.idirectsuper",
+            channelId = "some_other_id",
+            title = "When Income Grows, Investments Should Too",
+            text = "",
+        )
+        assertTrue(iciciPromo.matched)
+        assertEquals(Verdict.HIDE, iciciPromo.verdict)
+    }
+
+    @Test
+    fun `user session active apps have defaults preseeded`() {
+        assertEquals(8, DefaultRules.defaultAppRules.size)
+        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "in.swiggy.android" })
+        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "com.google.android.apps.nbu.paisa.user" })
+        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "net.one97.paytm" })
+        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "com.icicidirect.idirectsuper" })
+        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "com.csam.icici.bank.imobile" })
+        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "in.redbus.android" })
+        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "in.mobility.cumta" })
+        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "com.android.vending" })
+
+        assertEquals(5, DefaultRules.defaultVerdicts.size)
+    }
 }
