@@ -35,9 +35,23 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yk.notiffilter.NotifFilterApp
 import com.yk.notiffilter.service.FilterListenerService
 import com.yk.notiffilter.ui.SystemSettings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.lifecycle.viewModelScope
+import com.yk.notiffilter.data.BackupManager
+import com.yk.notiffilter.data.ImportResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
+    private val db = (app as NotifFilterApp).db
     private val settings = (app as NotifFilterApp).settings
 
     var confidenceMargin by mutableFloatStateOf(settings.confidenceMargin)
@@ -51,6 +65,16 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun saveMinExamples(value: Int) {
         minExamples = value
         settings.minExamples = value
+    }
+
+    fun exportBackup(onReady: (String) -> Unit) = viewModelScope.launch(Dispatchers.IO) {
+        val json = BackupManager.exportFromDatabase(db)
+        withContext(Dispatchers.Main) { onReady(json) }
+    }
+
+    fun importBackup(jsonStr: String, onComplete: (ImportResult) -> Unit) = viewModelScope.launch(Dispatchers.IO) {
+        val result = BackupManager.importIntoDatabase(jsonStr, db)
+        withContext(Dispatchers.Main) { onComplete(result) }
     }
 }
 
@@ -161,6 +185,68 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = viewModel()) {
                     )
                     OutlinedButton(onClick = { SystemSettings.requestBatteryExemption(context) }) {
                         Text("Battery settings")
+                    }
+                }
+            }
+
+            Text("Backup & Session Data", style = MaterialTheme.typography.titleMedium)
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Export or restore session data", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Export your opted-in apps, custom keyword/channel rules, and learned verdicts " +
+                            "into a JSON file to prevent data loss across rebuilds or reinstallations.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Button(
+                            onClick = {
+                                vm.exportBackup { json ->
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        putExtra(Intent.EXTRA_TEXT, json)
+                                        type = "text/plain"
+                                    }
+                                    context.startActivity(Intent.createChooser(sendIntent, "Export NotifFilter Backup"))
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Export Backup")
+                        }
+
+                        val importLauncher = rememberLauncherForActivityResult(
+                            contract = ActivityResultContracts.GetContent(),
+                        ) { uri ->
+                            if (uri != null) {
+                                val content = runCatching {
+                                    context.contentResolver.openInputStream(uri)?.use { it.reader().readText() }
+                                }.getOrNull()
+                                if (content != null) {
+                                    vm.importBackup(content) { result ->
+                                        if (result.success) {
+                                            Toast.makeText(
+                                                context,
+                                                "Restored ${result.appRulesCount} apps, ${result.notificationRulesCount} rules, ${result.templateVerdictsCount} verdicts!",
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                        } else {
+                                            Toast.makeText(context, "Import failed: ${result.error}", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = { importLauncher.launch("application/json") },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Import Backup")
+                        }
                     }
                 }
             }

@@ -69,6 +69,7 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    testImplementation("org.json:json:20240303")
 
     // The v1 -> v2 migration moves data the user cannot recreate, so it is tested
     // against a real on-disk schema. Needs a device or emulator.

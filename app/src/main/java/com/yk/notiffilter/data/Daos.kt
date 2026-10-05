@@ -12,6 +12,12 @@ interface AppRuleDao {
     @Query("SELECT * FROM app_rules ORDER BY appLabel COLLATE NOCASE")
     fun observeAll(): Flow<List<AppRule>>
 
+    @Query("SELECT * FROM app_rules")
+    suspend fun getAll(): List<AppRule>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(rules: List<AppRule>)
+
     @Query("SELECT * FROM app_rules WHERE packageName = :pkg")
     fun observe(pkg: String): Flow<AppRule?>
 
@@ -35,6 +41,12 @@ interface TemplateVerdictDao {
 
     @Upsert
     suspend fun upsert(verdict: TemplateVerdict)
+
+    @Query("SELECT * FROM template_verdicts")
+    suspend fun getAll(): List<TemplateVerdict>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(verdicts: List<TemplateVerdict>)
 
     /**
      * Only writes a model proposal when nothing is stored yet, so a classification
@@ -131,6 +143,9 @@ interface NotificationRuleDao {
 
     @Query("SELECT COUNT(*) FROM notification_rules")
     suspend fun count(): Int
+
+    @Query("SELECT * FROM notification_rules")
+    suspend fun getAll(): List<NotificationRule>
 
     @Query("SELECT * FROM notification_rules WHERE id = :id")
     suspend fun find(id: Long): NotificationRule?

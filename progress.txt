@@ -19,3 +19,8 @@ Status: In Progress
 - Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed with all test suites green.
 - Notes: Live path applies deterministic Whitelist and Blacklist rules before the AI classifier, preventing reworded spam from reaching the shade.
 --------------------------------------------------
+[2026-10-05 17:07:45] Completed Task 4: In-App Backup & Restore (JSON Export & Import)
+- Changes: Implemented BackupManager with full JSON serialization and deserialization for AppRule, TemplateVerdict, and NotificationRule. Added Backup & Session Data section in SettingsScreen with Export Backup and Import Backup buttons. Created BackupManagerTest covering roundtrip fidelity.
+- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed 100%.
+- Notes: Allows user to backup their rules and learned verdicts to JSON and restore seamlessly across app rebuilds.
+--------------------------------------------------
