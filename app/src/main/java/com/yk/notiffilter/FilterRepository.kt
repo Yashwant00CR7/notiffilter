@@ -5,6 +5,7 @@ import com.yk.notiffilter.data.FilterMode
 import com.yk.notiffilter.data.LogAction
 import com.yk.notiffilter.data.LogEntry
 import com.yk.notiffilter.data.NotifFilterDatabase
+import com.yk.notiffilter.data.NotificationRule
 import com.yk.notiffilter.data.TemplateVerdict
 import com.yk.notiffilter.data.Verdict
 import com.yk.notiffilter.data.VerdictSource
@@ -21,6 +22,14 @@ class FilterRepository(
     fun rule(pkg: String): Flow<AppRule?> = db.appRules().observe(pkg)
     fun log(): Flow<List<LogEntry>> = db.log().observeRecent()
     fun verdicts(pkg: String): Flow<List<TemplateVerdict>> = db.verdicts().observeForApp(pkg)
+
+    /** Notification keyword and channel rules. */
+    fun notificationRules(): Flow<List<NotificationRule>> = db.notificationRules().observeAll()
+    fun globalRules(): Flow<List<NotificationRule>> = db.notificationRules().observeGlobal()
+    fun notificationRulesForApp(pkg: String): Flow<List<NotificationRule>> = db.notificationRules().observeForApp(pkg)
+
+    suspend fun saveNotificationRule(rule: NotificationRule): Long = db.notificationRules().upsert(rule)
+    suspend fun deleteNotificationRule(id: Long) = db.notificationRules().delete(id)
 
     /** Templates the model declined to decide alone. This is the app's to-do list. */
     fun queue(): Flow<List<TemplateVerdict>> = db.verdicts().observeQueue()

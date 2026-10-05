@@ -7,9 +7,22 @@ import com.yk.notiffilter.data.NotifFilterDatabase
 import com.yk.notiffilter.data.VerdictTrainingSource
 import com.yk.notiffilter.notify.KeeperReposter
 import com.yk.notiffilter.service.FilterEngine
+import com.yk.notiffilter.rule.DefaultRules
 import com.yk.notiffilter.settings.AppSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class NotifFilterApp : Application() {
+
+    override fun onCreate() {
+        super.onCreate()
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                DefaultRules.preseedIfEmpty(db.notificationRules())
+            }
+        }
+    }
 
     val db: NotifFilterDatabase by lazy { NotifFilterDatabase.get(this) }
     val settings: AppSettings by lazy { AppSettings(this) }

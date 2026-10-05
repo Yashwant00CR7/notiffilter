@@ -57,6 +57,14 @@ class FilterEngine(
 
     suspend fun onPosted(sbn: StatusBarNotification, host: FilterHost) {
         val incoming = extract(sbn) ?: return
+        process(incoming, host, sbn)
+    }
+
+    suspend fun process(
+        incoming: Incoming,
+        host: FilterHost,
+        sbn: StatusBarNotification? = null,
+    ) {
         val rule = db.appRules().enabledRule(incoming.packageName) ?: return
 
         val fingerprint = Fingerprinter.fingerprint(
@@ -66,6 +74,7 @@ class FilterEngine(
             incoming.text,
         )
 
+        // Tier 1: Pinned template from database (user overrides or previously settled verdicts)
         val known = db.verdicts().find(fingerprint)
         if (known != null) {
             log(rule, incoming, known, fromCache = true)
@@ -73,8 +82,37 @@ class FilterEngine(
             return
         }
 
-        // Unseen template. Classification is local, synchronous and cannot fail, so
-        // there is no pending state and nothing to roll back.
+        // Tier 2 & Tier 3: Deterministic Rule Matching (Whitelist KEEP first -> Blacklist HIDE second)
+        val activeRules = db.notificationRules().getActiveRulesForApp(incoming.packageName)
+        val ruleMatch = com.yk.notiffilter.rule.RuleMatcher.match(
+            rules = activeRules,
+            packageName = incoming.packageName,
+            channelId = incoming.channelId,
+            title = incoming.title,
+            text = incoming.text,
+        )
+
+        if (ruleMatch.matched) {
+            val templateVerdict = TemplateVerdict(
+                fingerprint = fingerprint,
+                packageName = incoming.packageName,
+                verdict = ruleMatch.verdict,
+                reason = ruleMatch.reason,
+                source = VerdictSource.USER,
+                needsVerdict = false,
+                score = if (ruleMatch.verdict == Verdict.HIDE) 10.0 else -10.0,
+                channelId = incoming.channelId.orEmpty(),
+                sampleTitle = incoming.title,
+                sampleText = incoming.text,
+            )
+            db.verdicts().insertIfAbsent(templateVerdict)
+            val effective = db.verdicts().find(fingerprint) ?: templateVerdict
+            log(rule, incoming, effective, fromCache = false)
+            apply(effective, rule, incoming, sbn, host)
+            return
+        }
+
+        // Tier 4: Tuned Bayesian Classifier for unseen, unruled templates
         val classification = classifierFor().classify(
             ClassifyRequest(
                 packageName = incoming.packageName,
@@ -125,7 +163,7 @@ class FilterEngine(
         row: TemplateVerdict,
         rule: AppRule,
         incoming: Incoming,
-        sbn: StatusBarNotification,
+        sbn: StatusBarNotification?,
         host: FilterHost,
     ) {
         if (rule.mode == FilterMode.OBSERVE) return
@@ -135,7 +173,9 @@ class FilterEngine(
                 if (!rule.repostKeepers) return
                 // Order matters: post ours first, then drop the original. If the
                 // re-post throws, the original is still there and nothing is lost.
-                host.repost(sbn, rule.appLabel, incoming.title, incoming.text)
+                if (sbn != null) {
+                    host.repost(sbn, rule.appLabel, incoming.title, incoming.text)
+                }
                 host.cancel(incoming.key)
             }
 

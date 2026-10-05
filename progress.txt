@@ -14,3 +14,8 @@ Status: In Progress
 - Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed with all 7 new rule test cases passing.
 - Notes: Invariant guaranteed: Whitelist rules evaluate before Blacklist rules.
 --------------------------------------------------
+[2026-10-05 17:04:50] Completed Task 3: FilterEngine Hybrid Pipeline & In-Memory Caching
+- Changes: Updated FilterRepository to expose notificationRules Flow operations. Integrated RuleMatcher into FilterEngine with hybrid decision order (Tier 1 Pinned -> Tier 2 Whitelist -> Tier 3 Blacklist -> Tier 4 Bayesian AI). Preseeded default rules on app launch in NotifFilterApp. Made FilterEngine.process unit-testable.
+- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed with all test suites green.
+- Notes: Live path applies deterministic Whitelist and Blacklist rules before the AI classifier, preventing reworded spam from reaching the shade.
+--------------------------------------------------
