@@ -19,3 +19,8 @@ Status: In Progress
 - Verification: gradlew test BUILD SUCCESSFUL in 19s (all unit tests passed)
 - Notes: User changes to app rules are never lost on back navigation or toggle.
 --------------------------------------------------
+[2026-10-06 15:07:15] Completed Task 4: Fix UI Overlays (FAB Overlap, Dialog Soft-Keyboard, Navigation Insets)
+- Changes: GlobalRulesScreen.kt (bottom contentPadding = 88.dp, AddRuleDialog verticalScroll), HomeScreen.kt (bottom contentPadding = 88.dp), RuleEditorScreen.kt (bottom padding = 32.dp)
+- Verification: gradlew test BUILD SUCCESSFUL in 16s (all unit tests passed)
+- Notes: Resolved FAB overlay on bottom list items and dialog keyboard clipping.
+--------------------------------------------------
