@@ -46,6 +46,10 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
 import com.yk.notiffilter.data.NotificationRule
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+
 class RuleEditorViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as NotifFilterApp).repository
 
@@ -96,8 +100,26 @@ fun RuleEditorScreen(
     var mode by remember { mutableStateOf(FilterMode.OBSERVE) }
     var enabled by remember { mutableStateOf(true) }
     var repost by remember { mutableStateOf(true) }
-    var labelled by remember { mutableStateOf(0) }
-    var createdAt by remember { mutableStateOf(System.currentTimeMillis()) }
+    var labelled by remember { mutableIntStateOf(0) }
+    var createdAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    fun saveCurrent() {
+        vm.save(
+            AppRule(
+                packageName = packageName,
+                appLabel = label,
+                mode = mode,
+                enabled = enabled,
+                repostKeepers = repost,
+                createdAt = createdAt,
+            )
+        )
+    }
+
+    BackHandler {
+        saveCurrent()
+        onBack()
+    }
 
     LaunchedEffect(packageName) {
         val existing = vm.load(packageName)
@@ -120,7 +142,10 @@ fun RuleEditorScreen(
             TopAppBar(
                 title = { Text(label) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        saveCurrent()
+                        onBack()
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -175,6 +200,7 @@ fun RuleEditorScreen(
                         onClick = {
                             mode = if (mode == FilterMode.OBSERVE) FilterMode.ACTIVE
                             else FilterMode.OBSERVE
+                            saveCurrent()
                         },
                     ) {
                         Text(
@@ -189,14 +215,20 @@ fun RuleEditorScreen(
                 title = "Filter this app",
                 subtitle = "When off, notifications from this app pass through untouched.",
                 checked = enabled,
-                onChange = { enabled = it },
+                onChange = {
+                    enabled = it
+                    saveCurrent()
+                },
             )
             SwitchRow(
                 title = "Re-post kept notifications",
                 subtitle = "Keepers are re-posted on a channel that makes a sound, so you can " +
                     "set this app to Silent and still be interrupted by the ones that matter.",
                 checked = repost,
-                onChange = { repost = it },
+                onChange = {
+                    repost = it
+                    saveCurrent()
+                },
             )
 
             // Only surfaced once filtering is on: silencing an app while still
@@ -269,16 +301,7 @@ fun RuleEditorScreen(
 
             Button(
                 onClick = {
-                    vm.save(
-                        AppRule(
-                            packageName = packageName,
-                            appLabel = label,
-                            mode = mode,
-                            enabled = enabled,
-                            repostKeepers = repost,
-                            createdAt = createdAt,
-                        )
-                    )
+                    saveCurrent()
                     onBack()
                 },
                 modifier = Modifier.fillMaxWidth(),

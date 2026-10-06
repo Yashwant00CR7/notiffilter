@@ -14,3 +14,8 @@ Status: In Progress
 - Verification: gradlew test BUILD SUCCESSFUL in 20s (all unit tests passed)
 - Notes: Ensured unreviewed proposals never bypass rules, and Bayesian training data is kept clean.
 --------------------------------------------------
+[2026-10-06 15:03:55] Completed Task 3: Fix RuleEditorScreen State Persistence & Auto-Save
+- Changes: RuleEditorScreen.kt (BackHandler, saveCurrent, auto-save on toggle changes and onBack navigation)
+- Verification: gradlew test BUILD SUCCESSFUL in 19s (all unit tests passed)
+- Notes: User changes to app rules are never lost on back navigation or toggle.
+--------------------------------------------------
