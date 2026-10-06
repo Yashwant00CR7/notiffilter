@@ -1,5 +1,6 @@
 package com.yk.notiffilter.classify
 
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ln
 
@@ -101,7 +102,7 @@ class NaiveBayesClassifier(
             score: Double,
         ): String {
             val top = evidence(features).joinToString(", ") { readable(it.first) }
-            val rounded = String.format("%.1f", score)
+            val rounded = String.format(Locale.ROOT, "%.1f", score)
             val head = when (decision) {
                 Decision.HIDE -> "Hidden"
                 Decision.KEEP -> "Kept"

@@ -262,7 +262,7 @@ fun SettingsScreen(
                         }
 
                         OutlinedButton(
-                            onClick = { importLauncher.launch("application/json") },
+                            onClick = { importLauncher.launch("*/*") },
                             modifier = Modifier.weight(1f),
                         ) {
                             Text("Import Backup")

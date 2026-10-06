@@ -24,3 +24,8 @@ Status: In Progress
 - Verification: gradlew test BUILD SUCCESSFUL in 16s (all unit tests passed)
 - Notes: Resolved FAB overlay on bottom list items and dialog keyboard clipping.
 --------------------------------------------------
+[2026-10-06 15:09:25] Completed Task 5: Fix Backup Picker MIME Compatibility & Locale Formatting
+- Changes: SettingsScreen.kt (importLauncher accepts */*), NaiveBayesClassifier.kt (String.format Locale.ROOT), LogScreen.kt (formatTime function)
+- Verification: gradlew test BUILD SUCCESSFUL in 20s (all unit tests passed)
+- Notes: Resolved file picker graying out on JSON backups and default locale formatting warnings.
+--------------------------------------------------

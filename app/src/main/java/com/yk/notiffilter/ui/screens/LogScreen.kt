@@ -108,7 +108,7 @@ private fun LogCard(entry: LogEntry, onOverride: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "${entry.appLabel} · ${TIME.format(Date(entry.postedAt))}",
+                    "${entry.appLabel} · ${formatTime(entry.postedAt)}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -181,4 +181,5 @@ private fun ActionChip(action: LogAction) {
     )
 }
 
-private val TIME = SimpleDateFormat("d MMM, HH:mm", Locale.getDefault())
+private fun formatTime(timeMs: Long): String =
+    SimpleDateFormat("d MMM, HH:mm", Locale.getDefault()).format(Date(timeMs))
