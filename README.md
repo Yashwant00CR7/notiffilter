@@ -214,6 +214,7 @@ Aggressive OEM battery managers frequently terminate background `NotificationLis
 
 - **v1.0 (Cloud Groq LLM):** Originally experimented with sending notification text to Groq's cloud LLM API with Keystore-encrypted API keys.
 - **v2.0 (100% On-Device Naive Bayes):** Completely removed cloud inference, network permissions, and external dependencies. A service inspecting private notifications should never require trusting any server's data retention policy. Database schemas and user verdicts seamlessly migrate to the on-device model.
+- **v3.0 (Hybrid Rule Engine & Stabilization):** Introduced deterministic Whitelist/Blacklist rule matching (regex, channel, keywords) ahead of the Bayesian classifier, in-app JSON backup/restore, auto-saving app configurations, and complete notification lifecycle and UI overlay fixes.
 
 ---
 
