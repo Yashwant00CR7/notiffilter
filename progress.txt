@@ -9,3 +9,8 @@ Status: In Progress
 - Verification: gradlew test BUILD SUCCESSFUL in 21s (all unit tests passed)
 - Notes: Resolved service binding failure and kept notification instant vanishing.
 --------------------------------------------------
+[2026-10-06 15:01:10] Completed Task 2: Fix Decision Cascade & Training Set Cleanliness in FilterEngine
+- Changes: FilterEngine.kt (Tier 1 strictly settled USER verdicts, rule matches don't insert synthetic USER rows)
+- Verification: gradlew test BUILD SUCCESSFUL in 20s (all unit tests passed)
+- Notes: Ensured unreviewed proposals never bypass rules, and Bayesian training data is kept clean.
+--------------------------------------------------

@@ -74,9 +74,9 @@ class FilterEngine(
             incoming.text,
         )
 
-        // Tier 1: Pinned template from database (user overrides or previously settled verdicts)
+        // Tier 1: Pinned template from database (settled user answers only)
         val known = db.verdicts().find(fingerprint)
-        if (known != null) {
+        if (known != null && known.source == VerdictSource.USER && !known.needsVerdict) {
             log(rule, incoming, known, fromCache = true)
             apply(known, rule, incoming, sbn, host)
             return
@@ -98,17 +98,22 @@ class FilterEngine(
                 packageName = incoming.packageName,
                 verdict = ruleMatch.verdict,
                 reason = ruleMatch.reason,
-                source = VerdictSource.USER,
+                source = VerdictSource.MODEL,
                 needsVerdict = false,
                 score = if (ruleMatch.verdict == Verdict.HIDE) 10.0 else -10.0,
                 channelId = incoming.channelId.orEmpty(),
                 sampleTitle = incoming.title,
                 sampleText = incoming.text,
             )
-            db.verdicts().insertIfAbsent(templateVerdict)
-            val effective = db.verdicts().find(fingerprint) ?: templateVerdict
-            log(rule, incoming, effective, fromCache = false)
-            apply(effective, rule, incoming, sbn, host)
+            log(rule, incoming, templateVerdict, fromCache = false)
+            apply(templateVerdict, rule, incoming, sbn, host)
+            return
+        }
+
+        // If an earlier unreviewed model verdict exists, use it
+        if (known != null) {
+            log(rule, incoming, known, fromCache = true)
+            apply(known, rule, incoming, sbn, host)
             return
         }
 
