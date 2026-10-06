@@ -1,37 +1,11 @@
 # Ralph Loop Progress Log
-Started: 2026-10-05 16:56:45
+Started: 2026-10-06 14:58:30
 Task File: PRD.md
 Backpressure: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test
 Status: In Progress
 --------------------------------------------------
-[2026-10-05 17:00:00] Completed Task 1: Database Schema Expansion & Migration 2->3
-- Changes: Added MatchTarget enum and NotificationRule entity to Entities.kt, NotificationRuleDao to Daos.kt, updated NotifFilterDatabase to v3 with MIGRATION_2_3, and generated Room schema 3.json.
-- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed cleanly.
-- Notes: Backward compatibility preserved with hand-written MIGRATION_2_3 and full indexing.
+[2026-10-06 14:59:30] Completed Task 1: Fix Service Export & Re-post Lifecycle (Binding & Notification Vanishing)
+- Changes: AndroidManifest.xml (FilterListenerService exported=true), FilterListenerService.kt (internallyCancelledKeys tracking)
+- Verification: gradlew test BUILD SUCCESSFUL in 21s (all unit tests passed)
+- Notes: Resolved service binding failure and kept notification instant vanishing.
 --------------------------------------------------
-[2026-10-05 17:01:20] Completed Task 2: RuleMatcher Engine & Pre-seeded Default Rules
-- Changes: Created RuleMatcher.kt with strict Whitelist priority, case-insensitivity, channel target matching, and regex support. Created DefaultRules.kt with presets for OTPs, delivery/rides (Swiggy, Zomato, Blinkit, Zepto, Uber, Ola), and banking alerts. Added RuleMatcherTest.kt covering all match conditions.
-- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed with all 7 new rule test cases passing.
-- Notes: Invariant guaranteed: Whitelist rules evaluate before Blacklist rules.
---------------------------------------------------
-[2026-10-05 17:04:50] Completed Task 3: FilterEngine Hybrid Pipeline & In-Memory Caching
-- Changes: Updated FilterRepository to expose notificationRules Flow operations. Integrated RuleMatcher into FilterEngine with hybrid decision order (Tier 1 Pinned -> Tier 2 Whitelist -> Tier 3 Blacklist -> Tier 4 Bayesian AI). Preseeded default rules on app launch in NotifFilterApp. Made FilterEngine.process unit-testable.
-- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed with all test suites green.
-- Notes: Live path applies deterministic Whitelist and Blacklist rules before the AI classifier, preventing reworded spam from reaching the shade.
---------------------------------------------------
-[2026-10-05 17:07:45] Completed Task 4: In-App Backup & Restore (JSON Export & Import)
-- Changes: Implemented BackupManager with full JSON serialization and deserialization for AppRule, TemplateVerdict, and NotificationRule. Added Backup & Session Data section in SettingsScreen with Export Backup and Import Backup buttons. Created BackupManagerTest covering roundtrip fidelity.
-- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed 100%.
-- Notes: Allows user to backup their rules and learned verdicts to JSON and restore seamlessly across app rebuilds.
---------------------------------------------------
-[2026-10-05 17:10:45] Completed Task 5: Rule Management UI (App Rule Editor & Global Rules)
-- Changes: Built GlobalRulesScreen with search/filter (All/Keep/Hide), AddRuleDialog, toggle switch, and delete functionality. Integrated custom rules section into RuleEditorScreen allowing users to configure app-specific rules with add/delete/toggle. Wired GLOBAL_RULES route into MainActivity navigation and SettingsScreen.
-- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test passed 100%.
-- Notes: Provides intuitive UI for managing deterministic Whitelist and Blacklist rules both globally and per app.
---------------------------------------------------
-[2026-10-05 17:11:45] Completed Task 6: Full Verification, Documentation & APK Assembly
-- Changes: Updated README.md documenting the 4-tier decision hierarchy and Backup & Restore features. Assembled new debug APK at notiffilter-debug.apk. Verified full test suite.
-- Verification: JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew test and ./gradlew assembleDebug passed 100%.
-- Notes: All 6 PRD tasks completed.
---------------------------------------------------
-RALPH_COMPLETE

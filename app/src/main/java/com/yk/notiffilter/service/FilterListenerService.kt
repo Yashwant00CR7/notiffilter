@@ -53,18 +53,36 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
         }
     }
 
+    private val internallyCancelledKeys = java.util.Collections.newSetFromMap(
+        java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    )
+
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
-        // Dismissing the source notification should take our copy with it, so the two
-        // never drift apart in the shade.
-        sbn?.takeIf { it.packageName != packageName }?.let { reposter.cancelRepost(it.key) }
+        val notification = sbn ?: return
+        if (notification.packageName == packageName) return
+
+        // If we cancelled the source notification ourselves (e.g. to replace it with
+        // our loud repost or to hide it), do NOT cancel our active repost!
+        if (internallyCancelledKeys.remove(notification.key)) {
+            return
+        }
+
+        // Dismissing the source notification externally should take our copy with it,
+        // so the two never drift apart in the shade.
+        reposter.cancelRepost(notification.key)
     }
 
     override fun onDestroy() {
+        internallyCancelledKeys.clear()
         scope.cancel()
         super.onDestroy()
     }
 
     override fun cancel(key: String) {
+        if (internallyCancelledKeys.size > 200) {
+            internallyCancelledKeys.clear()
+        }
+        internallyCancelledKeys.add(key)
         runCatching { cancelNotification(key) }
             .onFailure { Log.e(TAG, "cancelNotification failed", it) }
     }
