@@ -106,12 +106,14 @@ flowchart TD
 | Tier | Evaluation Stage | Behavior |
 |---|---|---|
 | **Tier 1** | **Pinned User Verdicts** | Ground truth from your prior answers in the Queue or Log. Absolute priority. |
-| **Tier 2** | **Whitelist KEEP Rules** | Deterministic keywords, regex, or channels (e.g. `OTP`, `out for delivery`, `driver arriving`, `debited`). **Guaranteed KEEP** — re-posted loudly, original cancelled. Critical alerts can never be hidden. |
-| **Tier 3** | **Blacklist HIDE Rules** | Deterministic keywords, regex, or channels (e.g. `% off`, `flat ₹`, `cashback`, `use code`, promo channels). **Guaranteed HIDE** — cancelled silently before reaching your shade. |
+| **Tier 2** | **Whitelist KEEP Rules** | Deterministic keywords, regex, or channels (e.g. `OTP`, `out for delivery`, `driver arriving`, `debited`). **Guaranteed KEEP** — left exactly as the app sent it. Critical alerts can never be hidden. |
+| **Tier 3** | **Blacklist HIDE Rules** | Deterministic keywords, regex, or channels (e.g. `% off`, `flat ₹`, `use code`, promo channels). **Guaranteed HIDE** — cancelled silently before reaching your shade. |
 | **Tier 4** | **Tuned Bayesian Classifier** | On-device Naive Bayes model for unseen copy. Confident decisions act autonomously; unsure copy remains untouched in the shade and is queued for your review. |
 
-> **Why Keepers Get Re-Posted:**  
-> On Android, third-party apps cannot silence another app's notification before it plays sound. The solution: set the source app's channels to **Silent** once in Android Settings. When NotifFilter detects a keeper, it immediately re-posts it onto its own loud channel with audio.
+> **Why Keepers Can Be Re-Posted — and why it is off by default:**  
+> On Android, third-party apps cannot silence another app's notification before it plays sound. The workaround is to set the source app's channels to **Silent** once in Android Settings and let NotifFilter supply the sound for keepers on its own loud channel.
+>
+> That costs something, so it is **opt-in per app** (*App settings → Re-post kept notifications*). Re-posting means cancelling the original and posting our own copy, and our copy is plain title and text. Notifications carrying an inline reply, a "copy OTP" button, a picture, media controls or a progress bar are therefore **never re-posted** — they are kept by being left completely alone, whatever the toggle says.
 
 ---
 

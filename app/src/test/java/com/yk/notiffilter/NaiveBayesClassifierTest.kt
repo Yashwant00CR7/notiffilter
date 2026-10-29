@@ -119,6 +119,25 @@ class NaiveBayesClassifierTest {
     }
 
     @Test
+    fun `user real session data with only HIDE verdicts can still classify strong marketing spam`() = runTest {
+        val userSessionData = listOf(
+            labelled("marketing_notification_id", "Meetings are hard enough. 😭", "Make lunch easy with 70% OFF!", keep = false),
+            labelled("marketing_notification_id", "Running on chai & hope? 🫠", "Please get yourself something proper to eat.", keep = false),
+            labelled("your channel id", "Tune in to Nifty Ki Baat", "", keep = false),
+            labelled("your channel id", "When Income Grows, Investments Should Too ", "", keep = false),
+            labelled("moe_default_channel", "Treats, with plot twists!", "Explore naturally sweetened & unsweetened options.", keep = false),
+        )
+        val classifier = NaiveBayesClassifier(
+            Fake(
+                app = userSessionData,
+                global = userSessionData + com.yk.notiffilter.classify.BaselineTraining.BASELINE,
+            ),
+        )
+        val result = classifier.classify(ask("marketing_notification_id", "Make lunch easy with 50% OFF!", "Explore sweetened treats"))
+        assertEquals("score=${result.score}, reason=${result.reason}", Decision.HIDE, result.decision)
+    }
+
+    @Test
     fun `the reason names the evidence that moved the verdict`() = runTest {
         val classifier = NaiveBayesClassifier(Fake(swiggy()))
         val result = classifier.classify(ask("promo", "FLAT 70% OFF", "Grab it now!"))
@@ -145,5 +164,45 @@ class NaiveBayesClassifierTest {
         assertEquals(Decision.HIDE, promo.lean)
         assertEquals(Decision.UNSURE, order.decision)
         assertEquals(Decision.KEEP, order.lean)
+    }
+
+    /**
+     * The shipped-bug regression.
+     *
+     * A build seeded five HIDE verdicts and no KEEP one. Every feature of an unseen
+     * notification was then absent from an empty KEEP side, so each one contributed a
+     * large negative weight and the total cleared any sane margin. The model called
+     * genuinely novel notifications a confident KEEP, the engine cancelled them and
+     * re-posted lossy copies, and the user stopped receiving real notifications.
+     */
+    @Test
+    fun `one-sided training never produces a decision however large the score`() = runTest {
+        val hideOnly = listOf(
+            labelled("promo", "Meetings are hard enough 😭", "Make lunch easy with 70% OFF!", keep = false),
+            labelled("promo", "Running on chai & hope? 🫠", "Get something proper to eat.", keep = false),
+            labelled("promo", "Tune in to Nifty Ki Baat", "", keep = false),
+            labelled("promo", "When Income Grows, Investments Should Too", "", keep = false),
+            labelled("promo", "Treats, with plot twists!", "Explore sweetened options 💗🧁", keep = false),
+            labelled("promo", "LAST CHANCE", "50% off ends tonight!", keep = false),
+            labelled("promo", "Hungry? 🍕", "Flat ₹150 off your next order!", keep = false),
+            labelled("promo", "🔥 Buy 1 Get 1", "Only today, grab it fast!", keep = false),
+        )
+        val classifier = NaiveBayesClassifier(Fake(hideOnly))
+
+        // Past minExamples, and the raw log-odds are enormous — which is precisely
+        // the artefact the gate exists to disbelieve.
+        val novel = classifier.classify(ask("orders", "Order Delivered", "Enjoy your meal"))
+        assertTrue("expected a large artefact score, got ${novel.score}", novel.score < -4.0)
+        assertEquals(Decision.UNSURE, novel.decision)
+        assertTrue(novel.reason.contains("keep"))
+    }
+
+    @Test
+    fun `a balanced set of the same size does decide`() = runTest {
+        val decisive = NaiveBayesClassifier(Fake(swiggy()))
+        assertEquals(
+            Decision.HIDE,
+            decisive.classify(ask("promo", "MEGA SAVER 🎉", "Grab 70% off before midnight!")).decision,
+        )
     }
 }

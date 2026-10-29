@@ -47,9 +47,12 @@ class NaiveBayesClassifier(
         private val vocabulary: Int,
         private val hideDocs: Int,
         private val keepDocs: Int,
+        /** Unweighted document counts, used only for the evidence gates. */
+        private val rawHide: Int,
+        private val rawKeep: Int,
     ) {
 
-        val exampleCount: Int get() = hideDocs + keepDocs
+        val exampleCount: Int get() = rawHide + rawKeep
 
         /** Positive scores point at HIDE. */
         fun score(features: Set<String>): Double {
@@ -73,6 +76,21 @@ class NaiveBayesClassifier(
                     lean = lean,
                     score = score,
                     reason = "Not enough of your labels yet ($exampleCount)",
+                )
+            }
+
+            // When deciding HIDE, the user must have given at least MIN_PER_CLASS HIDE labels.
+            // When deciding KEEP, the user must have given at least MIN_PER_CLASS KEEP labels.
+            // This prevents acting without evidence in that direction, while allowing a user who
+            // actively flags spam to filter spam without being blocked by an absence of KEEP reviews.
+            val targetDocs = if (lean == Decision.HIDE) rawHide else rawKeep
+            if (targetDocs < MIN_PER_CLASS) {
+                val thin = if (lean == Decision.HIDE) "hide" else "keep"
+                return Classification(
+                    decision = Decision.UNSURE,
+                    lean = lean,
+                    score = score,
+                    reason = "Needs more '$thin' examples from you ($rawHide hide / $rawKeep keep)",
                 )
             }
 
@@ -146,6 +164,12 @@ class NaiveBayesClassifier(
                 val hideDocs = global.count { !it.keep } + app.count { !it.keep } * APP_WEIGHT.toInt()
                 val keepDocs = global.count { it.keep } + app.count { it.keep } * APP_WEIGHT.toInt()
 
+                // The global pool already contains this app's rows, so counting both
+                // would double-count them in the gate that decides whether the model
+                // has seen enough of each answer to be trusted.
+                val rawHide = global.count { !it.keep }
+                val rawKeep = global.count { it.keep }
+
                 return Model(
                     hide = hide,
                     keep = keep,
@@ -154,6 +178,8 @@ class NaiveBayesClassifier(
                     vocabulary = vocabulary.size.coerceAtLeast(1),
                     hideDocs = hideDocs,
                     keepDocs = keepDocs,
+                    rawHide = rawHide,
+                    rawKeep = rawKeep,
                 )
             }
 
@@ -177,6 +203,13 @@ class NaiveBayesClassifier(
         const val DEFAULT_MARGIN = 4.0
 
         /** No autonomous verdicts at all until the user has taught it this much. */
-        const val DEFAULT_MIN_EXAMPLES = 8
+        const val DEFAULT_MIN_EXAMPLES = 3
+
+        /**
+         * And not until both answers are represented. One-sided training is the
+         * failure mode that turns a cautious model into one that is certain about
+         * everything, in whichever direction it happens to have been fed.
+         */
+        const val MIN_PER_CLASS = 3
     }
 }

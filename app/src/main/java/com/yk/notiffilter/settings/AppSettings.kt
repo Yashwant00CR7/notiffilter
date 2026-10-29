@@ -29,6 +29,16 @@ class AppSettings(context: Context) {
         get() = prefs.getInt(KEY_MIN_EXAMPLES, NaiveBayesClassifier.DEFAULT_MIN_EXAMPLES)
         set(value) = prefs.edit().putInt(KEY_MIN_EXAMPLES, value.coerceIn(0, 100)).apply()
 
+    /**
+     * One-shot guard for the shipped rule set.
+     *
+     * Without it the seeder re-added every default the user had deleted, on every
+     * launch, so deleting a rule never stuck.
+     */
+    var defaultsSeeded: Boolean
+        get() = prefs.getBoolean(KEY_SEEDED, false)
+        set(value) = prefs.edit().putBoolean(KEY_SEEDED, value).apply()
+
     var logRetentionDays: Int
         get() = prefs.getInt(KEY_RETENTION, 30)
         set(value) = prefs.edit().putInt(KEY_RETENTION, value.coerceIn(1, 365)).apply()
@@ -37,5 +47,6 @@ class AppSettings(context: Context) {
         const val KEY_MARGIN = "confidence_margin"
         const val KEY_MIN_EXAMPLES = "min_examples"
         const val KEY_RETENTION = "log_retention_days"
+        const val KEY_SEEDED = "defaults_seeded"
     }
 }

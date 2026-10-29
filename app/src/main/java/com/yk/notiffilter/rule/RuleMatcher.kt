@@ -76,7 +76,11 @@ object RuleMatcher {
         text: String,
     ): Boolean {
         val targetText = when (rule.matchTarget) {
-            MatchTarget.ANY -> "$title $text"
+            MatchTarget.ANY -> listOfNotNull(
+                title.takeIf { it.isNotBlank() },
+                text.takeIf { it.isNotBlank() },
+                channelId?.takeIf { it.isNotBlank() },
+            ).joinToString(" ")
             MatchTarget.TITLE -> title
             MatchTarget.TEXT -> text
             MatchTarget.CHANNEL -> channelId.orEmpty()

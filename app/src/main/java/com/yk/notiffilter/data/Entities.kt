@@ -36,8 +36,13 @@ data class AppRule(
     /**
      * Re-post kept notifications on our own high-importance channel so they make a
      * sound even when the source app's channels have been set to Silent.
+     *
+     * Off by default, because re-posting cancels the original and replaces it with a
+     * plain title/text copy. That is only a good trade once the user has actually
+     * silenced this app's own channels; until then it is a downgrade of every
+     * notification the filter decides to keep.
      */
-    val repostKeepers: Boolean = true,
+    val repostKeepers: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
 )
 

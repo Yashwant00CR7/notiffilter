@@ -17,7 +17,7 @@ class VerdictTrainingSource(private val dao: TemplateVerdictDao) : TrainingSourc
         dao.trainingForApp(packageName).map(::toLabelled)
 
     override suspend fun global(): List<Labelled> =
-        dao.trainingGlobal().map(::toLabelled)
+        dao.trainingGlobal().map(::toLabelled) + com.yk.notiffilter.classify.BaselineTraining.BASELINE
 
     private fun toLabelled(row: TemplateVerdict) = Labelled(
         features = Tokenizer.features(

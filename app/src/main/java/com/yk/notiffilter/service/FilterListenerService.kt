@@ -53,9 +53,25 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
         }
     }
 
-    private val internallyCancelledKeys = java.util.Collections.newSetFromMap(
-        java.util.concurrent.ConcurrentHashMap<String, Boolean>()
-    )
+    /**
+     * Keys this service cancelled itself, waiting for their [onNotificationRemoved].
+     *
+     * Bounded and least-recently-used, not cleared wholesale. The previous version
+     * emptied the whole set once it passed 200 entries, which dropped the guards for
+     * every cancel still in flight — and the removal callback for one of those then
+     * read as "the user dismissed the original" and cancelled the keeper we had just
+     * posted. The notification vanished a fraction of a second after appearing.
+     */
+    private val internallyCancelledKeys: MutableSet<String> =
+        java.util.Collections.synchronizedSet(
+            object : java.util.LinkedHashSet<String>() {
+                override fun add(element: String): Boolean {
+                    val added = super.add(element)
+                    if (size > MAX_TRACKED_KEYS) iterator().let { it.next(); it.remove() }
+                    return added
+                }
+            }
+        )
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         val notification = sbn ?: return
@@ -79,9 +95,6 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
     }
 
     override fun cancel(key: String) {
-        if (internallyCancelledKeys.size > 200) {
-            internallyCancelledKeys.clear()
-        }
         internallyCancelledKeys.add(key)
         runCatching { cancelNotification(key) }
             .onFailure { Log.e(TAG, "cancelNotification failed", it) }
@@ -104,6 +117,9 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
 
     companion object {
         private const val TAG = "NotifFilter"
+
+        /** Enough to cover every cancel plausibly in flight at once. */
+        private const val MAX_TRACKED_KEYS = 200
 
         @Volatile
         var connected: Boolean = false

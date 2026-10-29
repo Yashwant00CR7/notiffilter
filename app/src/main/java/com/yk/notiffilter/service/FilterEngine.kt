@@ -53,6 +53,16 @@ class FilterEngine(
         val channelId: String?,
         val title: String,
         val text: String,
+        /**
+         * True when our re-post could not reproduce this notification faithfully.
+         *
+         * Our copy is plain title + text on our own channel. Anything carrying
+         * actions (inline reply, "copy OTP"), MessagingStyle, a picture, media
+         * controls or a progress bar loses all of it in translation — and since
+         * re-posting cancels the original, that loss is permanent. Such a
+         * notification is kept by leaving it entirely alone.
+         */
+        val richContent: Boolean = false,
     )
 
     suspend fun onPosted(sbn: StatusBarNotification, host: FilterHost) {
@@ -175,12 +185,14 @@ class FilterEngine(
 
         when {
             row.verdict == Verdict.KEEP -> {
-                if (!rule.repostKeepers) return
+                // Keeping means "leave it alone" unless the user asked us to supply
+                // the sound for an app whose own channels they have silenced. Without
+                // sbn there is nothing to copy, and cancelling then would delete a
+                // notification and put nothing in its place.
+                if (!rule.repostKeepers || incoming.richContent || sbn == null) return
                 // Order matters: post ours first, then drop the original. If the
                 // re-post throws, the original is still there and nothing is lost.
-                if (sbn != null) {
-                    host.repost(sbn, rule.appLabel, incoming.title, incoming.text)
-                }
+                host.repost(sbn, rule.appLabel, incoming.title, incoming.text)
                 host.cancel(incoming.key)
             }
 
@@ -229,6 +241,24 @@ class FilterEngine(
         )
     }
 
+    /**
+     * Whether a flat title/text copy would lose something the user needs.
+     *
+     * Checked against the template name the platform records rather than the style
+     * object, because the style itself is not readable back off a posted
+     * notification.
+     */
+    private fun isRich(notification: Notification, extras: android.os.Bundle): Boolean {
+        if (notification.actions?.isNotEmpty() == true) return true
+        if (extras.containsKey(Notification.EXTRA_PICTURE)) return true
+        if (extras.containsKey(Notification.EXTRA_MESSAGES)) return true
+        if (extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0) > 0) return true
+        if (extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE, false)) return true
+
+        val template = extras.getString(Notification.EXTRA_TEMPLATE).orEmpty()
+        return RICH_TEMPLATES.any { template.endsWith(it) }
+    }
+
     private fun extract(sbn: StatusBarNotification): Incoming? {
         val notification = sbn.notification ?: return null
         val flags = notification.flags
@@ -241,11 +271,38 @@ class FilterEngine(
         if (flags and Notification.FLAG_ONGOING_EVENT != 0) return null
 
         val extras = notification.extras ?: return null
-        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-        val text = (
+        val title = (
+            extras.getCharSequence(Notification.EXTRA_TITLE_BIG)
+                ?: extras.getCharSequence(Notification.EXTRA_TITLE)
+            )?.toString().orEmpty().trim()
+
+        val textParts = mutableListOf<String>()
+        val mainText = (
             extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
                 ?: extras.getCharSequence(Notification.EXTRA_TEXT)
-            )?.toString().orEmpty()
+            )?.toString().orEmpty().trim()
+        if (mainText.isNotBlank()) textParts.add(mainText)
+
+        val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty().trim()
+        if (subText.isNotBlank() && !textParts.contains(subText)) textParts.add(subText)
+
+        val summaryText = extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString().orEmpty().trim()
+        if (summaryText.isNotBlank() && !textParts.contains(summaryText)) textParts.add(summaryText)
+
+        val infoText = extras.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString().orEmpty().trim()
+        if (infoText.isNotBlank() && !textParts.contains(infoText)) textParts.add(infoText)
+
+        extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.forEach { line ->
+            val l = line?.toString().orEmpty().trim()
+            if (l.isNotBlank() && !textParts.contains(l)) textParts.add(l)
+        }
+
+        if (textParts.isEmpty()) {
+            val ticker = notification.tickerText?.toString().orEmpty().trim()
+            if (ticker.isNotBlank()) textParts.add(ticker)
+        }
+
+        val text = textParts.joinToString("\n")
 
         if (title.isBlank() && text.isBlank()) return null
 
@@ -255,6 +312,19 @@ class FilterEngine(
             channelId = notification.channelId,
             title = title,
             text = text,
+            richContent = isRich(notification, extras),
+        )
+    }
+
+    private companion object {
+        /** Platform style classes a plain title/text re-post cannot reproduce. */
+        val RICH_TEMPLATES = listOf(
+            "MessagingStyle",
+            "BigPictureStyle",
+            "MediaStyle",
+            "DecoratedMediaCustomViewStyle",
+            "InboxStyle",
+            "CallStyle",
         )
     }
 }

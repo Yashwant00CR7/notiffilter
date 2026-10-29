@@ -28,7 +28,7 @@ class Converters {
 
 @Database(
     entities = [AppRule::class, TemplateVerdict::class, LogEntry::class, NotificationRule::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -130,12 +130,72 @@ abstract class NotifFilterDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v3 → v4: undo the pre-seeded session data.
+         *
+         * A previous build shipped eight apps already switched to ACTIVE and five
+         * pre-labelled verdicts, all of them HIDE. Two consequences, both bad:
+         *
+         *  - apps the user never opted into were filtering from first launch, and
+         *  - the classifier's training set contained no KEEP example at all, so
+         *    every feature of an unseen notification counted as evidence against
+         *    hiding. The scores were enormous, the model read that as certainty,
+         *    and real notifications were cancelled and replaced by lossy copies.
+         *
+         * Code changes stop new installs doing this; this migration repairs the
+         * databases that already have it. The injected rows are identified exactly —
+         * by fingerprint, and by package plus the seeder's hard-coded createdAt — so
+         * nothing the user created themselves is touched.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            private val seededFingerprints = listOf(
+                "857e59cddf74fcd27207f703ddf5bcdc10ee7943ef66725fc3b2b8b9735821bd",
+                "69a346890ca820c3df3812c3631179509a885aac801e6d72a6add0fa4eaac94e",
+                "da5afa912750d05be7d85f4ad80ee279bd0b350e1345c96911d02054b824cec4",
+                "4c4f7d45b196e2c8c14d18d7a1c91b7c289af7d538798bef38072bb75f9b3b7b",
+                "89fbf0aa349d64f933a53b682fac89cfe239f5f33a243c0f864946a8a4b97418",
+            )
+
+            /** packageName to the createdAt the seeder wrote, which dates these rows. */
+            private val seededApps = listOf(
+                "in.swiggy.android" to 1790056839024L,
+                "com.google.android.apps.nbu.paisa.user" to 1790056853745L,
+                "net.one97.paytm" to 1790056885391L,
+                "com.icicidirect.idirectsuper" to 1790062279068L,
+                "com.csam.icici.bank.imobile" to 1790062290492L,
+                "in.redbus.android" to 1790068106428L,
+                "in.mobility.cumta" to 1790166362492L,
+                "com.android.vending" to 1790166425259L,
+            )
+
+            override fun migrate(db: SupportSQLiteDatabase) {
+                seededFingerprints.forEach {
+                    db.execSQL("DELETE FROM template_verdicts WHERE fingerprint = ?", arrayOf(it))
+                }
+
+                // Demoted rather than deleted: if the user has since decided they do
+                // want one of these apps filtered, the row and its label are still
+                // there and one tap puts it back. Deleting would discard that.
+                seededApps.forEach { (pkg, createdAt) ->
+                    db.execSQL(
+                        "UPDATE app_rules SET mode = 'OBSERVE' " +
+                            "WHERE packageName = ? AND createdAt = ?",
+                        arrayOf<Any>(pkg, createdAt),
+                    )
+                }
+
+                // Re-posting is now opt-in everywhere: it was defaulted on, never
+                // chosen, and it is the step that destroys the original notification.
+                db.execSQL("UPDATE app_rules SET repostKeepers = 0")
+            }
+        }
+
         fun get(context: Context): NotifFilterDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 NotifFilterDatabase::class.java,
                 "notiffilter.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
         }
     }
 }

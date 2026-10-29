@@ -203,6 +203,29 @@ class RuleMatcherTest {
     }
 
     @Test
+    fun `MatchTarget ANY matches keywords present in notification channel ID`() {
+        val rules = listOf(
+            NotificationRule(
+                pattern = "marketing",
+                matchTarget = MatchTarget.ANY,
+                verdict = Verdict.HIDE,
+                description = "Any marketing target",
+            ),
+        )
+
+        val result = RuleMatcher.match(
+            rules = rules,
+            packageName = "in.swiggy.android",
+            channelId = "marketing_notification_id",
+            title = "Special Dish",
+            text = "Delicious dinner for you",
+        )
+
+        assertTrue("Expected ANY rule to match channelId 'marketing_notification_id'", result.matched)
+        assertEquals(Verdict.HIDE, result.verdict)
+    }
+
+    @Test
     fun `user session spam notifications from Swiggy and ICICI Direct are caught by rules`() {
         val rules = DefaultRules.rules
 
@@ -252,17 +275,35 @@ class RuleMatcherTest {
     }
 
     @Test
-    fun `user session active apps have defaults preseeded`() {
-        assertEquals(8, DefaultRules.defaultAppRules.size)
-        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "in.swiggy.android" })
-        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "com.google.android.apps.nbu.paisa.user" })
-        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "net.one97.paytm" })
-        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "com.icicidirect.idirectsuper" })
-        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "com.csam.icici.bank.imobile" })
-        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "in.redbus.android" })
-        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "in.mobility.cumta" })
-        assertTrue(DefaultRules.defaultAppRules.any { it.packageName == "com.android.vending" })
+    fun `ships no pre-opted-in apps and no pre-labelled verdicts`() {
+        // The regression this guards: a build that seeded eight ACTIVE apps and five
+        // all-HIDE verdicts, which both filtered apps the user never chose and gave
+        // the classifier a training set with no KEEP example in it.
+        val fields = DefaultRules::class.java.declaredFields.map { it.name }
+        assertTrue("defaultAppRules" !in fields)
+        assertTrue("defaultVerdicts" !in fields)
+    }
 
-        assertEquals(5, DefaultRules.defaultVerdicts.size)
+    @Test
+    fun `a credited cashback outranks the cashback offer rule`() {
+        val rules = DefaultRules.rules
+        val credited = RuleMatcher.match(
+            rules = rules,
+            packageName = "net.one97.paytm",
+            channelId = "transactions",
+            title = "Cashback received",
+            text = "Cashback of \u20B950 credited to your Paytm wallet",
+        )
+        assertEquals(Verdict.KEEP, credited.verdict)
+
+        val offer = RuleMatcher.match(
+            rules = rules,
+            packageName = "net.one97.paytm",
+            channelId = "promos",
+            title = "Pay with Paytm",
+            text = "Get upto 100% cashback on your next recharge",
+        )
+        assertTrue(offer.matched)
+        assertEquals(Verdict.HIDE, offer.verdict)
     }
 }

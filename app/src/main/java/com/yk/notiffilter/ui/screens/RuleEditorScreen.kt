@@ -97,9 +97,9 @@ fun RuleEditorScreen(
     var loaded by remember { mutableStateOf(false) }
     var isNew by remember { mutableStateOf(true) }
     var label by remember { mutableStateOf(packageName) }
-    var mode by remember { mutableStateOf(FilterMode.OBSERVE) }
+    var mode by remember { mutableStateOf(FilterMode.ACTIVE) }
     var enabled by remember { mutableStateOf(true) }
-    var repost by remember { mutableStateOf(true) }
+    var repost by remember { mutableStateOf(false) }
     var labelled by remember { mutableIntStateOf(0) }
     var createdAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
@@ -222,8 +222,9 @@ fun RuleEditorScreen(
             )
             SwitchRow(
                 title = "Re-post kept notifications",
-                subtitle = "Keepers are re-posted on a channel that makes a sound, so you can " +
-                    "set this app to Silent and still be interrupted by the ones that matter.",
+                subtitle = "Turn this on only after silencing this app's own channels. " +
+                    "Our copy replaces the original, so it loses replies, buttons and " +
+                    "images. Notifications that carry those are always left untouched.",
                 checked = repost,
                 onChange = {
                     repost = it
