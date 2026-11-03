@@ -72,4 +72,13 @@ class TokenizerTest {
     fun `urls are recognised as a shape`() {
         assertTrue("«url»" in Tokenizer.shapes("", "Grab it at https://swiggy.app/x9"))
     }
+
+    @Test
+    fun `extracts word bigrams from title and text`() {
+        val features = Tokenizer.features(null, "Order Now", "Grab your meal")
+        assertTrue("bi:order_now" in features)
+        assertTrue("tibi:order_now" in features)
+        assertTrue("bi:grab_your" in features)
+        assertTrue("bi:your_meal" in features)
+    }
 }

@@ -72,6 +72,9 @@ interface TemplateVerdictDao {
     @Query("SELECT COUNT(*) FROM template_verdicts WHERE needsVerdict = 1")
     suspend fun queueSize(): Int
 
+    @Query("SELECT COUNT(*) FROM template_verdicts WHERE packageName = :pkg AND channelId = :channelId AND verdict = 'HIDE'")
+    suspend fun countHidesForChannel(pkg: String, channelId: String): Int
+
     @Query("SELECT DISTINCT packageName FROM template_verdicts WHERE needsVerdict = 1")
     suspend fun queuedPackages(): List<String>
 

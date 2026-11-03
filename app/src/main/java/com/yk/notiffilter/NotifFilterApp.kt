@@ -29,7 +29,7 @@ class NotifFilterApp : Application() {
     val reposter: KeeperReposter by lazy { KeeperReposter(this) }
     val repository: FilterRepository by lazy { FilterRepository(db, settings, reposter) }
 
-    val filterEngine: FilterEngine by lazy { FilterEngine(db, ::classifier) }
+    val filterEngine: FilterEngine by lazy { FilterEngine(db, ::classifier, settings) }
 
     /**
      * Built fresh each call so a threshold change in Settings takes effect on the

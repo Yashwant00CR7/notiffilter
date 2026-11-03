@@ -34,6 +34,14 @@ object BaselineTraining {
             Tokenizer.features("banking", "Account Alert", "INR 500 debited from your account"),
             keep = true,
         ),
+        Labelled(
+            Tokenizer.features("orders", "Order Delivered", "Your order has been delivered. Enjoy your meal!"),
+            keep = true,
+        ),
+        Labelled(
+            Tokenizer.features("banking", "Account Credited", "INR 1200 credited to your account"),
+            keep = true,
+        ),
 
         // Promotional HIDE baselines
         Labelled(
@@ -46,6 +54,18 @@ object BaselineTraining {
         ),
         Labelled(
             Tokenizer.features("marketing", "Limited Time Offer", "Special discount deal ends tonight"),
+            keep = false,
+        ),
+        Labelled(
+            Tokenizer.features("marketing", "Hungry? Order now", "Flat 40% OFF up to ₹100 on your next order"),
+            keep = false,
+        ),
+        Labelled(
+            Tokenizer.features("promo", "Free delivery on all orders", "Treat yourself today with special coupons"),
+            keep = false,
+        ),
+        Labelled(
+            Tokenizer.features("marketing_notification_id", "Weekend Special", "Order now and save big with discount"),
             keep = false,
         ),
     )

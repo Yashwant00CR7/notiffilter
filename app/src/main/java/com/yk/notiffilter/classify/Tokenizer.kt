@@ -21,6 +21,8 @@ object Tokenizer {
     /** Prefixes exist so a word in a title can carry different evidence than the same word in the body. */
     private const val WORD = "w:"
     private const val TITLE_WORD = "ti:"
+    private const val BIGRAM = "bi:"
+    private const val TITLE_BIGRAM = "tibi:"
     private const val CHANNEL = "ch:"
 
     private val WORD_SPLIT = Regex("""[^\p{L}\p{N}']+""")
@@ -39,14 +41,35 @@ object Tokenizer {
 
         channelId?.takeIf { it.isNotBlank() }?.let { features += CHANNEL + it }
 
-        words(title).forEach {
+        val titleWords = words(title)
+        titleWords.forEach {
             features += WORD + it
             features += TITLE_WORD + it
         }
-        words(text).forEach { features += WORD + it }
+        bigrams(titleWords).forEach {
+            features += BIGRAM + it
+            features += TITLE_BIGRAM + it
+        }
+
+        val textWords = words(text)
+        textWords.forEach { features += WORD + it }
+        bigrams(textWords).forEach { features += BIGRAM + it }
 
         features += shapes(title, text)
         return features
+    }
+
+    /**
+     * Extracts adjacent word pairs (bigrams).
+     *
+     * Phrases distinguish semantic intent where unigrams fail:
+     * "order now" (promo) vs "order confirmed" (transactional), or "flat off" vs "picked up".
+     */
+    fun bigrams(words: List<String>): List<String> {
+        if (words.size < 2) return emptyList()
+        return (0 until words.size - 1).map { i ->
+            "${words[i]}_${words[i + 1]}"
+        }
     }
 
     /**

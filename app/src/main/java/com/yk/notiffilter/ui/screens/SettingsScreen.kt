@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -27,6 +28,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -56,6 +58,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     var confidenceMargin by mutableFloatStateOf(settings.confidenceMargin)
     var minExamples by mutableIntStateOf(settings.minExamples)
+    var aggressiveSpamFiltering by mutableStateOf(settings.aggressiveSpamFiltering)
 
     fun saveMargin(value: Float) {
         confidenceMargin = value
@@ -65,6 +68,11 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun saveMinExamples(value: Int) {
         minExamples = value
         settings.minExamples = value
+    }
+
+    fun saveAggressiveSpam(value: Boolean) {
+        aggressiveSpamFiltering = value
+        settings.aggressiveSpamFiltering = value
     }
 
     fun exportBackup(onReady: (String) -> Unit) = viewModelScope.launch(Dispatchers.IO) {
@@ -158,6 +166,27 @@ fun SettingsScreen(
                 valueRange = 0f..40f,
                 steps = 39,
             )
+
+            Card(Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text("Aggressive Spam Filtering", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "When enabled, notifications that lean HIDE with moderate confidence (~88%) are hidden immediately rather than left in the shade. All hidden notifications remain recoverable in the Log.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = vm.aggressiveSpamFiltering,
+                        onCheckedChange = vm::saveAggressiveSpam,
+                    )
+                }
+            }
 
             Text("Permissions", style = MaterialTheme.typography.titleMedium)
             Card(Modifier.fillMaxWidth()) {

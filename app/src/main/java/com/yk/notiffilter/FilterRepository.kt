@@ -4,6 +4,7 @@ import com.yk.notiffilter.data.AppRule
 import com.yk.notiffilter.data.FilterMode
 import com.yk.notiffilter.data.LogAction
 import com.yk.notiffilter.data.LogEntry
+import com.yk.notiffilter.data.MatchTarget
 import com.yk.notiffilter.data.NotifFilterDatabase
 import com.yk.notiffilter.data.NotificationRule
 import com.yk.notiffilter.data.TemplateVerdict
@@ -64,6 +65,9 @@ class FilterRepository(
             if (keep) LogAction.KEPT else LogAction.HIDDEN,
             "You decided",
         )
+        if (!keep && template.channelId.isNotBlank()) {
+            checkAndAutoBlockChannel(template.packageName, template.channelId)
+        }
         refreshNudge()
     }
 
@@ -100,7 +104,44 @@ class FilterRepository(
             if (flipped == Verdict.KEEP) LogAction.KEPT else LogAction.HIDDEN,
             reason,
         )
+        if (flipped == Verdict.HIDE) {
+            val channel = existing?.channelId.orEmpty()
+            if (channel.isNotBlank()) {
+                checkAndAutoBlockChannel(entry.packageName, channel)
+            }
+        }
         refreshNudge()
+    }
+
+    /**
+     * Automatically creates an app-scoped channel HIDE rule when 2 or more notifications
+     * from the same channel have been confirmed as HIDE (spam).
+     */
+    suspend fun checkAndAutoBlockChannel(packageName: String, channelId: String) {
+        if (channelId.isBlank()) return
+        val count = db.verdicts().countHidesForChannel(packageName, channelId)
+        if (count >= 2) {
+            val existing = db.notificationRules().getActiveRulesForApp(packageName)
+                .any {
+                    it.matchTarget == MatchTarget.CHANNEL &&
+                        it.pattern.equals(channelId, ignoreCase = true) &&
+                        it.verdict == Verdict.HIDE
+                }
+            if (!existing) {
+                db.notificationRules().upsert(
+                    NotificationRule(
+                        packageName = packageName,
+                        pattern = channelId,
+                        isRegex = false,
+                        matchTarget = MatchTarget.CHANNEL,
+                        verdict = Verdict.HIDE,
+                        enabled = true,
+                        description = "Auto-blocked channel after 2 spam verdicts",
+                        createdAt = System.currentTimeMillis(),
+                    )
+                )
+            }
+        }
     }
 
     /** Keeps the silent nudge honest: it must vanish the moment the queue is empty. */

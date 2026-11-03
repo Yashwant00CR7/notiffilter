@@ -43,7 +43,18 @@ class AppSettings(context: Context) {
         get() = prefs.getInt(KEY_RETENTION, 30)
         set(value) = prefs.edit().putInt(KEY_RETENTION, value.coerceIn(1, 365)).apply()
 
-    private companion object {
+    /**
+     * When enabled, auto-cancels notifications that lean HIDE with moderate confidence
+     * (score >= [AGGRESSIVE_HIDE_THRESHOLD], ~88% certainty), rather than leaving them
+     * visible in the shade until 98% certainty is reached.
+     */
+    var aggressiveSpamFiltering: Boolean
+        get() = prefs.getBoolean(KEY_AGGRESSIVE_SPAM, true)
+        set(value) = prefs.edit().putBoolean(KEY_AGGRESSIVE_SPAM, value).apply()
+
+    companion object {
+        const val AGGRESSIVE_HIDE_THRESHOLD = 2.0
+        const val KEY_AGGRESSIVE_SPAM = "aggressive_spam_filtering"
         const val KEY_MARGIN = "confidence_margin"
         const val KEY_MIN_EXAMPLES = "min_examples"
         const val KEY_RETENTION = "log_retention_days"

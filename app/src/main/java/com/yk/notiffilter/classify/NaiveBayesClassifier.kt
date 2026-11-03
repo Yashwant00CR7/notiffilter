@@ -187,6 +187,9 @@ class NaiveBayesClassifier(
             fun readable(feature: String): String = feature
                 .removePrefix("w:")
                 .removePrefix("ti:")
+                .removePrefix("bi:")
+                .removePrefix("tibi:")
+                .replace("_", " ")
                 .replace("ch:", "channel ")
                 .replace("«", "")
                 .replace("»", "")

@@ -205,4 +205,22 @@ class NaiveBayesClassifierTest {
             decisive.classify(ask("promo", "MEGA SAVER 🎉", "Grab 70% off before midnight!")).decision,
         )
     }
+
+    @Test
+    fun `bigrams distinguish order now from order confirmed`() = runTest {
+        val training = listOf(
+            labelled("food", "Order Now", "Get 50% discount", keep = false),
+            labelled("food", "Order Confirmed", "Your meal is being prepared", keep = true),
+            labelled("food", "Order Delivered", "Enjoy your dinner", keep = true),
+            labelled("food", "Special Deal", "Order now to save", keep = false),
+            labelled("food", "Limited Offer", "Order now for promo", keep = false),
+            labelled("food", "Driver Assigned", "Your order has been picked up", keep = true),
+        )
+        val classifier = NaiveBayesClassifier(Fake(training), confidenceMargin = 2.0, minExamples = 3)
+        val promo = classifier.classify(ask("food", "Order Now", "Don't miss out"))
+        assertEquals(Decision.HIDE, promo.decision)
+
+        val update = classifier.classify(ask("food", "Order Confirmed", "Arriving soon"))
+        assertEquals(Decision.KEEP, update.decision)
+    }
 }

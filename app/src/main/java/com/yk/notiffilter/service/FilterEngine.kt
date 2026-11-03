@@ -5,15 +5,19 @@ import android.service.notification.StatusBarNotification
 import com.yk.notiffilter.classify.ClassifyRequest
 import com.yk.notiffilter.classify.Decision
 import com.yk.notiffilter.classify.NotificationClassifier
+import com.yk.notiffilter.classify.Tokenizer
 import com.yk.notiffilter.data.AppRule
 import com.yk.notiffilter.data.FilterMode
 import com.yk.notiffilter.data.LogAction
 import com.yk.notiffilter.data.LogEntry
+import com.yk.notiffilter.data.MatchTarget
 import com.yk.notiffilter.data.NotifFilterDatabase
+import com.yk.notiffilter.data.NotificationRule
 import com.yk.notiffilter.data.TemplateVerdict
 import com.yk.notiffilter.data.Verdict
 import com.yk.notiffilter.data.VerdictSource
 import com.yk.notiffilter.fingerprint.Fingerprinter
+import com.yk.notiffilter.settings.AppSettings
 
 /** What the engine needs from the platform. Keeps the decision logic off the service. */
 interface FilterHost {
@@ -44,6 +48,7 @@ class FilterEngine(
     private val db: NotifFilterDatabase,
     /** Built per call so a threshold change in Settings applies to the next notification. */
     private val classifierFor: () -> NotificationClassifier,
+    private val settings: AppSettings? = null,
 ) {
 
     /** Extracted so the decision can be unit-tested without a StatusBarNotification. */
@@ -120,6 +125,29 @@ class FilterEngine(
             return
         }
 
+        // Tier 1.5: Fuzzy template matching against settled user answers for this app
+        val userSettledTemplates = db.verdicts().trainingForApp(incoming.packageName)
+        val incomingFeatures = Tokenizer.features(incoming.channelId, incoming.title, incoming.text)
+        val fuzzyMatch = findFuzzyMatch(incomingFeatures, userSettledTemplates)
+        if (fuzzyMatch != null) {
+            val fuzzyVerdict = TemplateVerdict(
+                fingerprint = fingerprint,
+                packageName = incoming.packageName,
+                verdict = fuzzyMatch.verdict,
+                reason = "Similar to: ${fuzzyMatch.sampleTitle.take(25)}",
+                source = VerdictSource.USER,
+                needsVerdict = false,
+                score = if (fuzzyMatch.verdict == Verdict.HIDE) 8.0 else -8.0,
+                channelId = incoming.channelId.orEmpty(),
+                sampleTitle = incoming.title,
+                sampleText = incoming.text,
+            )
+            db.verdicts().insertIfAbsent(fuzzyVerdict)
+            log(rule, incoming, fuzzyVerdict, fromCache = true)
+            apply(fuzzyVerdict, rule, incoming, sbn, host)
+            return
+        }
+
         // If an earlier unreviewed model verdict exists, use it
         if (known != null) {
             log(rule, incoming, known, fromCache = true)
@@ -155,6 +183,10 @@ class FilterEngine(
             )
         )
 
+        if (direction == Decision.HIDE) {
+            autoBlockChannelIfRepeated(incoming.packageName, incoming.channelId)
+        }
+
         // Re-read rather than trusting what was just written: the user may have
         // answered this template from the queue while classification was in flight,
         // and a user answer always outranks a model proposal.
@@ -165,14 +197,40 @@ class FilterEngine(
         if (effective.needsVerdict) notifyQueue(host)
     }
 
+    internal suspend fun autoBlockChannelIfRepeated(packageName: String, channelId: String?) {
+        if (channelId.isNullOrBlank()) return
+        val count = db.verdicts().countHidesForChannel(packageName, channelId)
+        if (count >= 2) {
+            val existing = db.notificationRules().getActiveRulesForApp(packageName)
+                .any {
+                    it.matchTarget == MatchTarget.CHANNEL &&
+                        it.pattern.equals(channelId, ignoreCase = true) &&
+                        it.verdict == Verdict.HIDE
+                }
+            if (!existing) {
+                db.notificationRules().upsert(
+                    NotificationRule(
+                        packageName = packageName,
+                        pattern = channelId,
+                        isRegex = false,
+                        matchTarget = MatchTarget.CHANNEL,
+                        verdict = Verdict.HIDE,
+                        enabled = true,
+                        description = "Auto-blocked channel after 2 spam verdicts",
+                        createdAt = System.currentTimeMillis(),
+                    )
+                )
+            }
+        }
+    }
+
     /**
      * The whole decision table, and it is deliberately short.
      *
      * KEEP re-posts loudly whether it was certain or only leaning, because a
      * maybe-important message still has to reach a user whose source app they have
-     * set to Silent. HIDE only cancels when it was certain; an unsure lean towards
-     * hide leaves the notification exactly as the source app posted it — silent,
-     * intact, and waiting in the shade rather than destroyed on a guess.
+     * set to Silent. HIDE cancels when it was certain, or when aggressive spam filtering
+     * is enabled and the score cleared the aggressive threshold (2.0).
      */
     private fun apply(
         row: TemplateVerdict,
@@ -182,6 +240,10 @@ class FilterEngine(
         host: FilterHost,
     ) {
         if (rule.mode == FilterMode.OBSERVE) return
+
+        val aggressiveSpam = (settings?.aggressiveSpamFiltering ?: true) &&
+            row.verdict == Verdict.HIDE &&
+            row.score >= AppSettings.AGGRESSIVE_HIDE_THRESHOLD
 
         when {
             row.verdict == Verdict.KEEP -> {
@@ -196,7 +258,7 @@ class FilterEngine(
                 host.cancel(incoming.key)
             }
 
-            !row.needsVerdict -> host.cancel(incoming.key)
+            !row.needsVerdict || aggressiveSpam -> host.cancel(incoming.key)
 
             else -> Unit // unsure, leaning hide: untouched, silent, full fidelity
         }
@@ -220,11 +282,15 @@ class FilterEngine(
         row: TemplateVerdict,
         fromCache: Boolean,
     ) {
+        val aggressiveSpam = (settings?.aggressiveSpamFiltering ?: true) &&
+            row.verdict == Verdict.HIDE &&
+            row.score >= AppSettings.AGGRESSIVE_HIDE_THRESHOLD
+
         val action = when {
             rule.mode == FilterMode.OBSERVE -> LogAction.OBSERVED
-            row.needsVerdict -> LogAction.ASKED
             row.verdict == Verdict.KEEP -> LogAction.KEPT
-            else -> LogAction.HIDDEN
+            !row.needsVerdict || aggressiveSpam -> LogAction.HIDDEN
+            else -> LogAction.ASKED
         }
         db.log().insert(
             LogEntry(
@@ -316,7 +382,35 @@ class FilterEngine(
         )
     }
 
-    private companion object {
+    companion object {
+        internal fun findFuzzyMatch(
+            incomingFeatures: Set<String>,
+            candidates: List<TemplateVerdict>,
+            threshold: Double = 0.60,
+        ): TemplateVerdict? {
+            if (incomingFeatures.isEmpty() || candidates.isEmpty()) return null
+            var bestCandidate: TemplateVerdict? = null
+            var highestSimilarity = 0.0
+
+            for (candidate in candidates) {
+                val candidateFeatures = Tokenizer.features(
+                    candidate.channelId.takeIf { it.isNotBlank() },
+                    candidate.sampleTitle,
+                    candidate.sampleText,
+                )
+                val intersection = incomingFeatures.intersect(candidateFeatures).size
+                val union = incomingFeatures.union(candidateFeatures).size
+                if (union > 0) {
+                    val similarity = intersection.toDouble() / union.toDouble()
+                    if (similarity >= threshold && similarity > highestSimilarity) {
+                        highestSimilarity = similarity
+                        bestCandidate = candidate
+                    }
+                }
+            }
+            return bestCandidate
+        }
+
         /** Platform style classes a plain title/text re-post cannot reproduce. */
         val RICH_TEMPLATES = listOf(
             "MessagingStyle",
