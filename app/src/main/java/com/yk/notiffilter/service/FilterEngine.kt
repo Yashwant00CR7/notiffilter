@@ -325,7 +325,7 @@ class FilterEngine(
         return RICH_TEMPLATES.any { template.endsWith(it) }
     }
 
-    private fun extract(sbn: StatusBarNotification): Incoming? {
+    fun extract(sbn: StatusBarNotification): Incoming? {
         val notification = sbn.notification ?: return null
         val flags = notification.flags
 

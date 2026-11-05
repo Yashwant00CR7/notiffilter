@@ -1,5 +1,6 @@
 package com.yk.notiffilter.service
 
+import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
 import android.provider.Settings
@@ -7,6 +8,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.yk.notiffilter.NotifFilterApp
+import com.yk.notiffilter.fingerprint.Fingerprinter
 import com.yk.notiffilter.notify.KeeperReposter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,12 +31,14 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        instance = this
         connected = true
         Log.i(TAG, "Listener connected")
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        if (instance == this) instance = null
         connected = false
         // ColorOS is aggressive about killing bound services. Asking for a rebind is
         // the documented recovery; a listener that stays dead degrades to "everything
@@ -89,6 +93,7 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
     }
 
     override fun onDestroy() {
+        if (instance == this) instance = null
         internallyCancelledKeys.clear()
         scope.cancel()
         super.onDestroy()
@@ -115,6 +120,54 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
 
     override fun clearNudge() = reposter.clearNudge()
 
+    fun dismissMatching(
+        packageName: String,
+        fingerprint: String? = null,
+        title: String? = null,
+        text: String? = null,
+    ) {
+        val active = runCatching { activeNotifications }.getOrNull() ?: return
+        for (sbn in active) {
+            if (sbn == null) continue
+            if (sbn.packageName == packageName) {
+                val incoming = engine.extract(sbn)
+                val matches = when {
+                    incoming != null && fingerprint != null -> {
+                        val fp = Fingerprinter.fingerprint(
+                            incoming.packageName,
+                            incoming.channelId,
+                            incoming.title,
+                            incoming.text,
+                        )
+                        fp == fingerprint
+                    }
+                    incoming != null -> {
+                        (title.isNullOrBlank() || incoming.title == title) &&
+                            (text.isNullOrBlank() || incoming.text == text)
+                    }
+                    else -> {
+                        val extras = sbn.notification?.extras
+                        val t = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().trim()
+                        val m = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty().trim()
+                        (title.isNullOrBlank() || t == title) && (text.isNullOrBlank() || m == text)
+                    }
+                }
+                if (matches) {
+                    cancel(sbn.key)
+                    reposter.cancelRepost(sbn.key)
+                }
+            } else if (sbn.packageName == this.packageName) {
+                val extras = sbn.notification?.extras
+                val repTitle = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().trim()
+                val repText = extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
+                    ?: extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty().trim()
+                if ((!title.isNullOrBlank() && repTitle == title) || (!text.isNullOrBlank() && repText == text)) {
+                    cancel(sbn.key)
+                }
+            }
+        }
+    }
+
     companion object {
         private const val TAG = "NotifFilter"
 
@@ -122,8 +175,21 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
         private const val MAX_TRACKED_KEYS = 200
 
         @Volatile
+        var instance: FilterListenerService? = null
+            private set
+
+        @Volatile
         var connected: Boolean = false
             private set
+
+        fun dismissMatching(
+            packageName: String,
+            fingerprint: String? = null,
+            title: String? = null,
+            text: String? = null,
+        ) {
+            instance?.dismissMatching(packageName, fingerprint, title, text)
+        }
 
         /** Source of truth for whether the user has granted notification access. */
         fun isEnabled(context: Context): Boolean {

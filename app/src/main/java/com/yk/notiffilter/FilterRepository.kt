@@ -11,6 +11,7 @@ import com.yk.notiffilter.data.TemplateVerdict
 import com.yk.notiffilter.data.Verdict
 import com.yk.notiffilter.data.VerdictSource
 import com.yk.notiffilter.notify.KeeperReposter
+import com.yk.notiffilter.service.FilterListenerService
 import com.yk.notiffilter.settings.AppSettings
 import kotlinx.coroutines.flow.Flow
 
@@ -65,35 +66,45 @@ class FilterRepository(
             if (keep) LogAction.KEPT else LogAction.HIDDEN,
             "You decided",
         )
-        if (!keep && template.channelId.isNotBlank()) {
-            checkAndAutoBlockChannel(template.packageName, template.channelId)
+        if (!keep) {
+            if (template.channelId.isNotBlank()) {
+                checkAndAutoBlockChannel(template.packageName, template.channelId)
+            }
+            FilterListenerService.dismissMatching(
+                packageName = template.packageName,
+                fingerprint = template.fingerprint,
+                title = template.sampleTitle,
+                text = template.sampleText,
+            )
         }
         refreshNudge()
     }
 
     /**
-     * Flips a verdict from the log — the correction path for something the model got
-     * wrong on its own. Identical in effect to answering a queued template: the row
-     * becomes USER-sourced, leaves the queue, and starts training the model.
+     * Sets an explicit KEEP or HIDE verdict from the history/log.
+     *
+     * Identical in effect to answering a queued template: the row becomes USER-sourced,
+     * leaves the queue, and starts training the model. If set to HIDE, any active
+     * notifications matching this entry in the shade are immediately cleared.
      */
-    suspend fun override(entry: LogEntry, reason: String = "Corrected by you") {
+    suspend fun setVerdict(
+        entry: LogEntry,
+        keep: Boolean,
+        reason: String = "You decided",
+    ) {
+        val targetVerdict = if (keep) Verdict.KEEP else Verdict.HIDE
+        val targetAction = if (keep) LogAction.KEPT else LogAction.HIDDEN
         val existing = db.verdicts().find(entry.fingerprint)
-        val flipped = when (entry.action) {
-            LogAction.HIDDEN -> Verdict.KEEP
-            LogAction.KEPT -> Verdict.HIDE
-            // An ASKED or OBSERVED row was never acted on, so "wrong" means the lean
-            // was wrong; flip whatever the model was leaning towards.
-            else -> if (existing?.verdict == Verdict.HIDE) Verdict.KEEP else Verdict.HIDE
-        }
+
         db.verdicts().upsert(
             TemplateVerdict(
                 fingerprint = entry.fingerprint,
                 packageName = entry.packageName,
-                verdict = flipped,
+                verdict = targetVerdict,
                 reason = reason,
                 source = VerdictSource.USER,
                 needsVerdict = false,
-                score = existing?.score ?: 0.0,
+                score = existing?.score ?: if (keep) -10.0 else 10.0,
                 channelId = existing?.channelId.orEmpty(),
                 sampleTitle = entry.title,
                 sampleText = entry.text,
@@ -101,16 +112,36 @@ class FilterRepository(
         )
         db.log().applyOverrideToHistory(
             entry.fingerprint,
-            if (flipped == Verdict.KEEP) LogAction.KEPT else LogAction.HIDDEN,
+            targetAction,
             reason,
         )
-        if (flipped == Verdict.HIDE) {
+        if (!keep) {
             val channel = existing?.channelId.orEmpty()
             if (channel.isNotBlank()) {
                 checkAndAutoBlockChannel(entry.packageName, channel)
             }
+            FilterListenerService.dismissMatching(
+                packageName = entry.packageName,
+                fingerprint = entry.fingerprint,
+                title = entry.title,
+                text = entry.text,
+            )
         }
         refreshNudge()
+    }
+
+    /**
+     * Flips a verdict from the log — the correction path for something the model got
+     * wrong on its own.
+     */
+    suspend fun override(entry: LogEntry, reason: String = "Corrected by you") {
+        val existing = db.verdicts().find(entry.fingerprint)
+        val keep = when (entry.action) {
+            LogAction.HIDDEN -> true
+            LogAction.KEPT -> false
+            else -> existing?.verdict != Verdict.KEEP
+        }
+        setVerdict(entry, keep, reason)
     }
 
     /**

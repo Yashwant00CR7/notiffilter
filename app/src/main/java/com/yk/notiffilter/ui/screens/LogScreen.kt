@@ -18,12 +18,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -76,6 +78,7 @@ class LogViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun override(entry: LogEntry) = viewModelScope.launch { repo.override(entry) }
+    fun setVerdict(entry: LogEntry, keep: Boolean) = viewModelScope.launch { repo.setVerdict(entry, keep) }
     fun clear() = viewModelScope.launch { repo.clearLog() }
 }
 
@@ -209,7 +212,15 @@ fun LogScreen(onBack: () -> Unit, vm: LogViewModel = viewModel()) {
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(filteredEntries, key = LogEntry::id) { entry ->
-                        LogCard(entry = entry, onOverride = { vm.override(entry) })
+                        val showTwoOptions = effectiveFilter == LogFilter.OTHER ||
+                            (entry.action != LogAction.KEPT && entry.action != LogAction.HIDDEN)
+                        LogCard(
+                            entry = entry,
+                            onOverride = { vm.override(entry) },
+                            onKeep = { vm.setVerdict(entry, keep = true) },
+                            onHide = { vm.setVerdict(entry, keep = false) },
+                            showTwoOptions = showTwoOptions,
+                        )
                     }
                 }
             }
@@ -218,7 +229,13 @@ fun LogScreen(onBack: () -> Unit, vm: LogViewModel = viewModel()) {
 }
 
 @Composable
-private fun LogCard(entry: LogEntry, onOverride: () -> Unit) {
+private fun LogCard(
+    entry: LogEntry,
+    onOverride: () -> Unit,
+    onKeep: () -> Unit,
+    onHide: () -> Unit,
+    showTwoOptions: Boolean,
+) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(
@@ -262,9 +279,24 @@ private fun LogCard(entry: LogEntry, onOverride: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            // One tap pins the opposite verdict for this whole template. Nothing
-            // matching it is ever reconsidered, and the row starts training the model.
-            if (entry.action != LogAction.PENDING && entry.action != LogAction.ERROR) {
+            // When in "Other" or for unclassified/observed/asked entries, provide both Keep and Hide options.
+            // If hidden, the active notification in the shade is also automatically dismissed.
+            if (showTwoOptions) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = onHide, modifier = Modifier.weight(1f)) {
+                        Text("Always hide")
+                    }
+                    Button(onClick = onKeep, modifier = Modifier.weight(1f)) {
+                        Text("Always show")
+                    }
+                }
+            } else if (entry.action != LogAction.PENDING && entry.action != LogAction.ERROR) {
+                // One tap pins the opposite verdict for this whole template.
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onOverride) {
                         Text(
