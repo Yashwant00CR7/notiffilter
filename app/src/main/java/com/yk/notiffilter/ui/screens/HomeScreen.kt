@@ -93,7 +93,7 @@ fun HomeScreen(
                 title = { Text("NotifFilter") },
                 actions = {
                     IconButton(onClick = onOpenLog) {
-                        Icon(Icons.Default.History, contentDescription = "Log")
+                        Icon(Icons.Default.History, contentDescription = "History")
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
