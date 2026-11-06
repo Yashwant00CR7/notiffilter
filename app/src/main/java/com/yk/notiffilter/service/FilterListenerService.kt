@@ -131,40 +131,42 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
         val active = runCatching { activeNotifications }.getOrNull() ?: return
         for (sbn in active) {
             if (sbn == null) continue
-            if (sbn.packageName == packageName) {
-                val incoming = engine.extract(sbn)
-                val matches = when {
-                    incoming != null && fingerprint != null -> {
-                        val fp = Fingerprinter.fingerprint(
-                            incoming.packageName,
-                            incoming.channelId,
-                            incoming.title,
-                            incoming.text,
-                        )
-                        fp == fingerprint
+            runCatching {
+                if (sbn.packageName == packageName) {
+                    val incoming = engine.extract(sbn)
+                    val matches = when {
+                        incoming != null && fingerprint != null -> {
+                            val fp = Fingerprinter.fingerprint(
+                                incoming.packageName,
+                                incoming.channelId,
+                                incoming.title,
+                                incoming.text,
+                            )
+                            fp == fingerprint
+                        }
+                        incoming != null -> {
+                            (title.isNullOrBlank() || incoming.title == title) &&
+                                (text.isNullOrBlank() || incoming.text == text)
+                        }
+                        else -> {
+                            val extras = sbn.notification?.extras
+                            val t = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().trim()
+                            val m = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty().trim()
+                            (title.isNullOrBlank() || t == title) && (text.isNullOrBlank() || m == text)
+                        }
                     }
-                    incoming != null -> {
-                        (title.isNullOrBlank() || incoming.title == title) &&
-                            (text.isNullOrBlank() || incoming.text == text)
+                    if (matches) {
+                        cancel(sbn.key)
+                        reposter.cancelRepost(sbn.key)
                     }
-                    else -> {
-                        val extras = sbn.notification?.extras
-                        val t = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().trim()
-                        val m = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty().trim()
-                        (title.isNullOrBlank() || t == title) && (text.isNullOrBlank() || m == text)
+                } else if (sbn.packageName == this.packageName) {
+                    val extras = sbn.notification?.extras
+                    val repTitle = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().trim()
+                    val repText = extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
+                        ?: extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty().trim()
+                    if ((!title.isNullOrBlank() && repTitle == title) || (!text.isNullOrBlank() && repText == text)) {
+                        cancel(sbn.key)
                     }
-                }
-                if (matches) {
-                    cancel(sbn.key)
-                    reposter.cancelRepost(sbn.key)
-                }
-            } else if (sbn.packageName == this.packageName) {
-                val extras = sbn.notification?.extras
-                val repTitle = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().trim()
-                val repText = extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
-                    ?: extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty().trim()
-                if ((!title.isNullOrBlank() && repTitle == title) || (!text.isNullOrBlank() && repText == text)) {
-                    cancel(sbn.key)
                 }
             }
         }

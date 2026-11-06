@@ -110,7 +110,7 @@ class AppPickerViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
-        return result.sortedBy { it.label.lowercase() }
+        return result.distinctBy { "${it.packageName}_${it.label}" }.sortedBy { it.label.lowercase() }
     }
 }
 
@@ -153,7 +153,7 @@ fun AppPickerScreen(
                         .padding(16.dp),
                 )
             }
-            items(filtered, key = { "${it.packageName}_${it.label}" }) { app ->
+            items(filtered) { app ->
                 ListItem(
                     headlineContent = { Text(app.label) },
                     supportingContent = { Text(app.packageName) },

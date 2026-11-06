@@ -334,132 +334,95 @@ class FilterEngine(
      * notification.
      */
     private fun isRich(notification: Notification, extras: android.os.Bundle): Boolean {
-        if (notification.actions?.isNotEmpty() == true) return true
-        if (extras.containsKey(Notification.EXTRA_PICTURE)) return true
-        if (extras.containsKey(Notification.EXTRA_MESSAGES)) return true
-        if (extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0) > 0) return true
-        if (extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE, false)) return true
+        return runCatching {
+            if (notification.actions?.isNotEmpty() == true) return@runCatching true
+            if (extras.containsKey(Notification.EXTRA_PICTURE)) return@runCatching true
+            if (extras.containsKey(Notification.EXTRA_MESSAGES)) return@runCatching true
+            if (extras.getInt(Notification.EXTRA_PROGRESS_MAX, 0) > 0) return@runCatching true
+            if (extras.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE, false)) return@runCatching true
 
-        val template = extras.getString(Notification.EXTRA_TEMPLATE).orEmpty()
-        return RICH_TEMPLATES.any { template.endsWith(it) }
+            val template = extras.getString(Notification.EXTRA_TEMPLATE).orEmpty()
+            RICH_TEMPLATES.any { template.endsWith(it) }
+        }.getOrDefault(false)
     }
 
     fun extract(sbn: StatusBarNotification): Incoming? {
-        val notification = sbn.notification ?: return null
-        val flags = notification.flags
+        return runCatching {
+            val notification = sbn.notification ?: return null
+            val flags = notification.flags
 
-        val isOngoing = (flags and Notification.FLAG_ONGOING_EVENT != 0)
-        val isGroupSummary = (flags and Notification.FLAG_GROUP_SUMMARY != 0)
+            // Group summaries only mirror their children, and cancelling one takes the
+            // whole group with it.
+            if (flags and Notification.FLAG_GROUP_SUMMARY != 0) return null
+            // Ongoing notifications are foreground-service ones — live order tracking,
+            // music, calls. They cannot be cancelled and should not be.
+            if (flags and Notification.FLAG_ONGOING_EVENT != 0) return null
 
-        val extras = notification.extras ?: android.os.Bundle.EMPTY
-        var title = (
-            extras.getCharSequence(Notification.EXTRA_TITLE_BIG)
-                ?: extras.getCharSequence(Notification.EXTRA_TITLE)
-                ?: extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)
-                ?: extras.getCharSequence("android.title")
-            )?.toString().orEmpty().trim()
+            val extras = notification.extras ?: return null
+            var title = (
+                runCatching { extras.getCharSequence(Notification.EXTRA_TITLE_BIG) }.getOrNull()
+                    ?: runCatching { extras.getCharSequence(Notification.EXTRA_TITLE) }.getOrNull()
+                    ?: runCatching { extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE) }.getOrNull()
+                    ?: runCatching { extras.getCharSequence("android.title") }.getOrNull()
+                )?.toString().orEmpty().trim()
 
-        val textParts = mutableListOf<String>()
-        val mainText = (
-            extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
-                ?: extras.getCharSequence(Notification.EXTRA_TEXT)
-                ?: extras.getCharSequence("android.text")
-            )?.toString().orEmpty().trim()
-        if (mainText.isNotBlank()) textParts.add(mainText)
+            val textParts = mutableListOf<String>()
+            val mainText = (
+                runCatching { extras.getCharSequence(Notification.EXTRA_BIG_TEXT) }.getOrNull()
+                    ?: runCatching { extras.getCharSequence(Notification.EXTRA_TEXT) }.getOrNull()
+                    ?: runCatching { extras.getCharSequence("android.text") }.getOrNull()
+                )?.toString().orEmpty().trim()
+            if (mainText.isNotBlank()) textParts.add(mainText)
 
-        val subText = (extras.getCharSequence(Notification.EXTRA_SUB_TEXT)
-            ?: extras.getCharSequence("android.subText"))?.toString().orEmpty().trim()
-        if (subText.isNotBlank() && !textParts.contains(subText)) textParts.add(subText)
+            val subText = runCatching {
+                (extras.getCharSequence(Notification.EXTRA_SUB_TEXT)
+                    ?: extras.getCharSequence("android.subText"))?.toString().orEmpty().trim()
+            }.getOrDefault("")
+            if (subText.isNotBlank() && !textParts.contains(subText)) textParts.add(subText)
 
-        val summaryText = (extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)
-            ?: extras.getCharSequence("android.summaryText"))?.toString().orEmpty().trim()
-        if (summaryText.isNotBlank() && !textParts.contains(summaryText)) textParts.add(summaryText)
+            val summaryText = runCatching {
+                (extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)
+                    ?: extras.getCharSequence("android.summaryText"))?.toString().orEmpty().trim()
+            }.getOrDefault("")
+            if (summaryText.isNotBlank() && !textParts.contains(summaryText)) textParts.add(summaryText)
 
-        val infoText = (extras.getCharSequence(Notification.EXTRA_INFO_TEXT)
-            ?: extras.getCharSequence("android.infoText"))?.toString().orEmpty().trim()
-        if (infoText.isNotBlank() && !textParts.contains(infoText)) textParts.add(infoText)
+            val infoText = runCatching {
+                (extras.getCharSequence(Notification.EXTRA_INFO_TEXT)
+                    ?: extras.getCharSequence("android.infoText"))?.toString().orEmpty().trim()
+            }.getOrDefault("")
+            if (infoText.isNotBlank() && !textParts.contains(infoText)) textParts.add(infoText)
 
-        extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.forEach { line ->
-            val l = line?.toString().orEmpty().trim()
-            if (l.isNotBlank() && !textParts.contains(l)) textParts.add(l)
-        }
+            runCatching {
+                extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.forEach { line ->
+                    val l = line?.toString().orEmpty().trim()
+                    if (l.isNotBlank() && !textParts.contains(l)) textParts.add(l)
+                }
+            }
 
-        // MessagingStyle messages (e.g. EXTRA_MESSAGES)
-        val messages = runCatching {
-            extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            if (textParts.isEmpty()) {
+                val ticker = runCatching { notification.tickerText?.toString().orEmpty().trim() }.getOrDefault("")
+                if (ticker.isNotBlank()) textParts.add(ticker)
+            }
+
+            if (title.isBlank()) {
+                val ticker = runCatching { notification.tickerText?.toString().orEmpty().trim() }.getOrDefault("")
+                if (ticker.isNotBlank()) title = ticker
+            }
+
+            val text = textParts.joinToString("\n")
+
+            if (title.isBlank() && text.isBlank()) return null
+
+            Incoming(
+                packageName = sbn.packageName,
+                key = sbn.key,
+                channelId = notification.channelId,
+                title = title,
+                text = text,
+                richContent = isRich(notification, extras),
+                isOngoing = false,
+            )
         }.getOrNull()
-        if (messages != null) {
-            for (msg in messages) {
-                if (msg is android.os.Bundle) {
-                    val mText = msg.getCharSequence("text")?.toString().orEmpty().trim()
-                    if (mText.isNotBlank() && !textParts.contains(mText)) {
-                        textParts.add(mText)
-                    }
-                }
-            }
-        }
-
-        if (textParts.isEmpty()) {
-            val ticker = notification.tickerText?.toString().orEmpty().trim()
-            if (ticker.isNotBlank()) textParts.add(ticker)
-        }
-
-        // Fallback search through all extras for any other CharSequence if title/text are still empty
-        if (title.isBlank() || textParts.isEmpty()) {
-            for (key in extras.keySet()) {
-                if (key.startsWith("android.support") || key.startsWith("androidx.")) continue
-                val value = runCatching { extras.get(key) }.getOrNull()
-                if (value is CharSequence && value.isNotBlank()) {
-                    val str = value.toString().trim()
-                    if (title.isBlank() && key.contains("title", ignoreCase = true)) {
-                        title = str
-                    } else if (!textParts.contains(str) && str.length > 2) {
-                        textParts.add(str)
-                    }
-                }
-            }
-        }
-
-        // If title is still blank, fallback to channelId or tickerText or app name
-        if (title.isBlank()) {
-            val channel = notification.channelId.orEmpty()
-            title = when {
-                channel.isNotBlank() && channel != "miscellaneous" ->
-                    channel.replace('_', ' ').replace('-', ' ').trim()
-                        .split(" ")
-                        .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
-                !notification.tickerText.isNullOrBlank() -> notification.tickerText.toString().trim()
-                sbn.packageName.contains("amazon", ignoreCase = true) -> "Amazon Pay"
-                else -> ""
-            }
-        }
-
-        var text = textParts.joinToString("\n")
-        if (text.isBlank() && title.isNotBlank()) {
-            text = notification.channelId.orEmpty()
-        }
-
-        // Pure empty group summary with zero content: skip it to avoid disrupting group shade
-        if (isGroupSummary && title.isBlank() && text.isBlank()) {
-            return null
-        }
-
-        // If still completely blank, fallback to placeholder rather than dropping
-        if (title.isBlank() && text.isBlank()) {
-            if (isGroupSummary) return null
-            title = if (sbn.packageName.contains("amazon", ignoreCase = true)) "Amazon Notification" else "Notification"
-            text = notification.channelId.takeUnless { it.isNullOrBlank() } ?: "[Content]"
-        }
-
-        return Incoming(
-            packageName = sbn.packageName,
-            key = sbn.key,
-            channelId = notification.channelId,
-            title = title,
-            text = text,
-            richContent = isRich(notification, extras),
-            isOngoing = isOngoing,
-        )
     }
 
     companion object {
