@@ -193,6 +193,38 @@ object DefaultRules {
             verdict = Verdict.KEEP,
             description = "UPI reference confirmation",
         ),
+        NotificationRule(
+            packageName = null,
+            pattern = "amazon pay",
+            isRegex = false,
+            matchTarget = MatchTarget.ANY,
+            verdict = Verdict.KEEP,
+            description = "Amazon Pay transaction alert",
+        ),
+        NotificationRule(
+            packageName = null,
+            pattern = "amzpay",
+            isRegex = false,
+            matchTarget = MatchTarget.ANY,
+            verdict = Verdict.KEEP,
+            description = "Amazon Pay SMS alert",
+        ),
+        NotificationRule(
+            packageName = null,
+            pattern = "paid ₹",
+            isRegex = false,
+            matchTarget = MatchTarget.ANY,
+            verdict = Verdict.KEEP,
+            description = "Payment made alert",
+        ),
+        NotificationRule(
+            packageName = null,
+            pattern = "paid rs",
+            isRegex = false,
+            matchTarget = MatchTarget.ANY,
+            verdict = Verdict.KEEP,
+            description = "Payment made alert",
+        ),
 
         // ==========================================
         // GLOBAL BLACKLIST (HIDE) - Marketing Spam Patterns
@@ -456,6 +488,64 @@ object DefaultRules {
             matchTarget = MatchTarget.ANY,
             verdict = Verdict.HIDE,
             description = "Zomato craving alert",
+        ),
+
+        // Amazon & Amazon Pay
+        NotificationRule(
+            packageName = "in.amazon.mShop.android.shopping",
+            pattern = "pay",
+            isRegex = false,
+            matchTarget = MatchTarget.CHANNEL,
+            verdict = Verdict.KEEP,
+            description = "Amazon Pay payment channel",
+        ),
+        NotificationRule(
+            packageName = "in.amazon.mShop.android.shopping",
+            pattern = "amazon pay",
+            isRegex = false,
+            matchTarget = MatchTarget.ANY,
+            verdict = Verdict.KEEP,
+            description = "Amazon Pay transaction alert",
+        ),
+        NotificationRule(
+            packageName = "in.amazon.mShop.android.shopping",
+            pattern = "upi",
+            isRegex = false,
+            matchTarget = MatchTarget.ANY,
+            verdict = Verdict.KEEP,
+            description = "Amazon Pay UPI transaction",
+        ),
+        NotificationRule(
+            packageName = "in.amazon.mShop.android.shopping",
+            pattern = "paid ₹",
+            isRegex = false,
+            matchTarget = MatchTarget.ANY,
+            verdict = Verdict.KEEP,
+            description = "Amazon Pay payment receipt",
+        ),
+        NotificationRule(
+            packageName = "in.amazon.mShop.android.shopping",
+            pattern = "deals",
+            isRegex = false,
+            matchTarget = MatchTarget.CHANNEL,
+            verdict = Verdict.HIDE,
+            description = "Amazon promotional deals channel",
+        ),
+        NotificationRule(
+            packageName = "in.amazon.mShop.android.shopping",
+            pattern = "lightning deal",
+            isRegex = false,
+            matchTarget = MatchTarget.ANY,
+            verdict = Verdict.HIDE,
+            description = "Amazon promotional deal",
+        ),
+        NotificationRule(
+            packageName = "in.amazon.mShop.android.shopping",
+            pattern = "deal of the day",
+            isRegex = false,
+            matchTarget = MatchTarget.ANY,
+            verdict = Verdict.HIDE,
+            description = "Amazon deal of the day",
         ),
     )
 

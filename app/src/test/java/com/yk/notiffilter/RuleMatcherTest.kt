@@ -306,4 +306,32 @@ class RuleMatcherTest {
         assertTrue(offer.matched)
         assertEquals(Verdict.HIDE, offer.verdict)
     }
+
+    @Test
+    fun `amazon pay payment notification matches KEEP rules`() {
+        val rules = DefaultRules.rules
+        val amazonPay = RuleMatcher.match(
+            rules = rules,
+            packageName = "in.amazon.mShop.android.shopping",
+            channelId = "amazon_pay_transactions",
+            title = "Amazon Pay: Paid \u20B9450",
+            text = "Paid \u20B9450 to Swiggy using Amazon Pay UPI. UPI Ref 4123456789",
+        )
+        assertTrue(amazonPay.matched)
+        assertEquals(Verdict.KEEP, amazonPay.verdict)
+    }
+
+    @Test
+    fun `amazon promotional deal matches HIDE rules`() {
+        val rules = DefaultRules.rules
+        val amazonDeal = RuleMatcher.match(
+            rules = rules,
+            packageName = "in.amazon.mShop.android.shopping",
+            channelId = "deals",
+            title = "Lightning Deal ends soon!",
+            text = "Save up to 60% off on electronics and smartphones today.",
+        )
+        assertTrue(amazonDeal.matched)
+        assertEquals(Verdict.HIDE, amazonDeal.verdict)
+    }
 }

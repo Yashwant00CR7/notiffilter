@@ -64,74 +64,53 @@ class AppPickerViewModel(app: Application) : AndroidViewModel(app) {
         val pm = getApplication<Application>().packageManager
         val selfPkg = getApplication<Application>().packageName
 
-        // 1. Collect all activity labels and aliases (e.g. Amazon Pay, sub-shortcuts)
-        val aliasesByPkg = mutableMapOf<String, MutableSet<String>>()
-        val activities = runCatching {
-            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN), PackageManager.MATCH_ALL)
+        // Launchable apps only: Keeps the list clean, fast, and readable without system daemons
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val launcherApps = runCatching {
+            pm.queryIntentActivities(intent, PackageManager.MATCH_ALL)
         }.getOrDefault(emptyList())
-
-        for (resolve in activities) {
-            val pkg = resolve.activityInfo?.packageName ?: continue
-            val actLabel = runCatching { resolve.loadLabel(pm)?.toString()?.trim() }.getOrNull()
-            if (!actLabel.isNullOrBlank()) {
-                aliasesByPkg.getOrPut(pkg) { mutableSetOf() }.add(actLabel)
-            }
-        }
-
-        // 2. Query all installed packages
-        val installed = runCatching {
-            pm.getInstalledApplications(PackageManager.GET_META_DATA)
-        }.getOrElse {
-            runCatching { pm.getInstalledApplications(0) }.getOrDefault(emptyList())
-        }
 
         val appMap = mutableMapOf<String, InstalledApp>()
 
-        for (info in installed) {
-            val pkg = info.packageName
+        for (resolve in launcherApps) {
+            val pkg = resolve.activityInfo?.packageName ?: continue
             if (pkg == selfPkg) continue
 
-            val rawLabel = runCatching { pm.getApplicationLabel(info).toString().trim() }.getOrNull()
-            val label = if (!rawLabel.isNullOrBlank()) rawLabel else pkg
-
-            val aliases = aliasesByPkg[pkg] ?: mutableSetOf()
-            aliases.remove(label)
-
-            // Amazon Pay is built into the main Amazon Shopping app in India/worldwide.
-            // Map these aliases so searching "Amazon Pay" or "Pay" immediately finds it.
-            if (pkg.contains("amazon", ignoreCase = true)) {
-                aliases.add("Amazon Pay")
-                aliases.add("Amazon Shopping")
-                aliases.add("Apay")
-                aliases.add("Amazon UPI")
-            }
-
-            appMap[pkg] = InstalledApp(
-                packageName = pkg,
-                label = label,
-                aliases = aliases.toList(),
-            )
-        }
-
-        // 3. Fallback for any packages in activities that were not returned by getInstalledApplications
-        for ((pkg, aliases) in aliasesByPkg) {
-            if (pkg == selfPkg || appMap.containsKey(pkg)) continue
             val label = runCatching {
-                val info = pm.getApplicationInfo(pkg, 0)
-                pm.getApplicationLabel(info).toString().trim()
-            }.getOrDefault(pkg)
-            aliases.remove(label)
+                resolve.loadLabel(pm)?.toString()?.trim()
+            }.getOrNull().takeUnless { it.isNullOrBlank() }
+                ?: runCatching { pm.getApplicationLabel(resolve.activityInfo.applicationInfo).toString().trim() }.getOrDefault(pkg)
+
+            val aliases = mutableListOf<String>()
             if (pkg.contains("amazon", ignoreCase = true)) {
-                aliases.add("Amazon Pay")
+                aliases.addAll(listOf("Amazon Shopping", "Amazon Pay", "Pay", "UPI", "Apay"))
+            } else if (pkg.contains("messaging", ignoreCase = true) || pkg.contains("mms", ignoreCase = true)) {
+                aliases.addAll(listOf("SMS", "Messages", "Text"))
             }
+
             appMap[pkg] = InstalledApp(
                 packageName = pkg,
                 label = label,
-                aliases = aliases.toList(),
+                aliases = aliases,
             )
         }
 
-        return appMap.values.sortedBy { it.label.lowercase() }
+        // Amazon Pay is part of Amazon Shopping (in.amazon.mShop.android.shopping).
+        // Add an explicit first-class entry for Amazon Pay so users can see and pick it directly.
+        val amazonEntry = appMap.values.firstOrNull { it.packageName.contains("amazon", ignoreCase = true) }
+        val result = appMap.values.toMutableList()
+
+        if (amazonEntry != null) {
+            result.add(
+                InstalledApp(
+                    packageName = amazonEntry.packageName,
+                    label = "Amazon Pay",
+                    aliases = listOf("Amazon", "Pay", "UPI", "Apay", "Amazon Shopping", "Wallet"),
+                )
+            )
+        }
+
+        return result.sortedBy { it.label.lowercase() }
     }
 }
 
@@ -174,19 +153,9 @@ fun AppPickerScreen(
                         .padding(16.dp),
                 )
             }
-            items(filtered, key = InstalledApp::packageName) { app ->
-                val matchedAlias = if (query.isNotBlank()) {
-                    app.aliases.firstOrNull { it.contains(query.trim(), ignoreCase = true) }
-                } else null
-
-                val title = if (matchedAlias != null && !app.label.contains(matchedAlias, ignoreCase = true)) {
-                    "${app.label} ($matchedAlias)"
-                } else {
-                    app.label
-                }
-
+            items(filtered, key = { "${it.packageName}_${it.label}" }) { app ->
                 ListItem(
-                    headlineContent = { Text(title) },
+                    headlineContent = { Text(app.label) },
                     supportingContent = { Text(app.packageName) },
                     modifier = Modifier.clickable { onPicked(app.packageName) },
                 )

@@ -51,6 +51,8 @@ class FilterListenerService : NotificationListenerService(), FilterHost {
         val notification = sbn ?: return
         if (notification.packageName == packageName) return // never filter our own re-posts
 
+        Log.d(TAG, "Notification received from ${notification.packageName} (id=${notification.id}, tag=${notification.tag})")
+
         scope.launch {
             runCatching { engine.onPosted(notification, this@FilterListenerService) }
                 .onFailure { Log.e(TAG, "Filtering failed for ${notification.packageName}", it) }

@@ -44,4 +44,32 @@ class InstalledAppTest {
         assertTrue(amazonApp.matches("UPI"))
         assertFalse(amazonApp.matches("Flipkart"))
     }
+
+    @Test
+    fun `matches dedicated Amazon Pay entry`() {
+        val amazonPay = InstalledApp(
+            packageName = "in.amazon.mShop.android.shopping",
+            label = "Amazon Pay",
+            aliases = listOf("Amazon", "Pay", "UPI", "Apay", "Amazon Shopping", "Wallet"),
+        )
+        assertTrue(amazonPay.matches("Amazon"))
+        assertTrue(amazonPay.matches("Amazon Pay"))
+        assertTrue(amazonPay.matches("pay"))
+        assertTrue(amazonPay.matches("UPI"))
+        assertTrue(amazonPay.matches("Apay"))
+        assertFalse(amazonPay.matches("Swiggy"))
+    }
+
+    @Test
+    fun `matches SMS and Messages alias for SMS apps`() {
+        val messagesApp = InstalledApp(
+            packageName = "com.google.android.apps.messaging",
+            label = "Messages",
+            aliases = listOf("SMS", "Messages", "Text"),
+        )
+        assertTrue(messagesApp.matches("SMS"))
+        assertTrue(messagesApp.matches("sms"))
+        assertTrue(messagesApp.matches("text"))
+        assertTrue(messagesApp.matches("Messages"))
+    }
 }
